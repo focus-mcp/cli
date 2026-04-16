@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: 2026 FocusMCP contributors
+# SPDX-License-Identifier: MIT
+
+name: Setup toolchain
+description: |
+  Clone @focusmcp/core as a sibling directory (../core), install and build it,
+  then set up pnpm + Node and install this repo's dependencies.
+  The CLI depends on `@focusmcp/core` via a `file:../core/packages/core` path,
+  so the sibling must exist and have a built `dist/` before `pnpm install`.
+
+inputs:
+  core-ref:
+    description: Git ref (branch, tag, SHA) of focus-mcp/core to check out.
+    required: false
+    default: main
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout @focusmcp/core as sibling
+      uses: actions/checkout@v4
+      with:
+        repository: focus-mcp/core
+        ref: ${{ inputs.core-ref }}
+        path: ../core-checkout
+        fetch-depth: 1
+
+    # actions/checkout requires paths inside the workspace; move to the real sibling.
+    - name: Move @focusmcp/core to sibling location
+      shell: bash
+      run: |
+        mv "$GITHUB_WORKSPACE/../core-checkout" "$GITHUB_WORKSPACE/../core"
+
+    - name: Set up pnpm
+      uses: pnpm/action-setup@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+
+    - name: Install @focusmcp/core dependencies
+      shell: bash
+      working-directory: ../core
+      run: pnpm install --frozen-lockfile
+
+    - name: Build @focusmcp/core
+      shell: bash
+      working-directory: ../core
+      run: pnpm --filter "@focusmcp/core" build
+
+    - name: Install CLI dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
