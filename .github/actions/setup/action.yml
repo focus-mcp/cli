@@ -17,19 +17,19 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Checkout @focusmcp/core as sibling
+    - name: Checkout @focusmcp/core (inside workspace — actions/checkout restriction)
       uses: actions/checkout@v4
       with:
         repository: focus-mcp/core
         ref: ${{ inputs.core-ref }}
-        path: ../core-checkout
+        path: .core-sibling
         fetch-depth: 1
 
-    # actions/checkout requires paths inside the workspace; move to the real sibling.
+    # actions/checkout refuses paths outside the workspace; move it to the real sibling now.
     - name: Move @focusmcp/core to sibling location
       shell: bash
       run: |
-        mv "$GITHUB_WORKSPACE/../core-checkout" "$GITHUB_WORKSPACE/../core"
+        mv "$GITHUB_WORKSPACE/.core-sibling" "$GITHUB_WORKSPACE/../core"
 
     - name: Set up pnpm
       uses: pnpm/action-setup@v4
