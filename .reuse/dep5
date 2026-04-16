@@ -1,0 +1,30 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: FocusMCP CLI
+Upstream-Contact: FocusMCP contributors <contact@focusmcp.dev>
+Source: https://github.com/focus-mcp/cli
+
+Files: PRD.md AGENTS.md README.md CHANGELOG.md
+       CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md
+       *.json *.yaml *.yml *.toml .nvmrc .editorconfig .gitattributes .gitignore
+Copyright: 2026 FocusMCP contributors
+License: MIT
+
+Files: src/**
+Copyright: 2026 FocusMCP contributors
+License: MIT
+
+Files: .github/**
+Copyright: 2026 FocusMCP contributors
+License: MIT
+
+Files: .changeset/**
+Copyright: 2026 FocusMCP contributors
+License: MIT
+
+Files: .husky/**
+Copyright: 2026 FocusMCP contributors
+License: MIT
+
+Files: config/**
+Copyright: 2026 FocusMCP contributors
+License: MIT

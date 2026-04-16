@@ -1,0 +1,4 @@
+// SPDX-FileCopyrightText: 2026 FocusMCP contributors
+// SPDX-License-Identifier: MIT
+
+export {};

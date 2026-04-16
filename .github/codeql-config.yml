@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 FocusMCP contributors
+# SPDX-License-Identifier: MIT
+
+name: CodeQL config for FocusMCP CLI
+
+queries:
+  - uses: security-and-quality
+
+paths:
+  - src
+
+paths-ignore:
+  - '**/node_modules'
+  - '**/dist'
+  - '**/*.test.ts'
+  - '**/*.spec.ts'

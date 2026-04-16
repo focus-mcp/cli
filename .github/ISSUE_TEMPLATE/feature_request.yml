@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 FocusMCP contributors
+# SPDX-License-Identifier: MIT
+
+name: Feature request
+description: Propose a new feature for the FocusMCP CLI
+labels: [feature]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the problem or user need. No solution here.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - label: Breaking change (major bump)
+        - label: New command or flag
+        - label: Transport layer (stdio / HTTP admin API)
+        - label: CI / tooling
+        - label: Documentation
+  - type: checkboxes
+    id: adr
+    attributes:
+      label: ADR
+      options:
+        - label: This feature requires an ADR (architecture decision)
