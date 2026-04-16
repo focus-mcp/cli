@@ -39,6 +39,7 @@ runs:
       with:
         node-version: 22
         cache: pnpm
+        registry-url: 'https://registry.npmjs.org'
 
     - name: Install @focusmcp/core dependencies
       shell: bash
