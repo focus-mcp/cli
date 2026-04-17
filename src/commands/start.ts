@@ -20,5 +20,7 @@
  * for a working server.
  */
 export async function startCommand(): Promise<void> {
-  throw new Error('focus start not implemented yet — stdio MCP transport will land in the next PR');
+    throw new Error(
+        'focus start not implemented yet — stdio MCP transport will land in the next PR',
+    );
 }
