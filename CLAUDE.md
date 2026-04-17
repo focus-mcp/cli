@@ -18,7 +18,7 @@ Ce repo est **le point d'entrée primaire** : `@focusmcp/cli`, une CLI Node publ
 qui embarque `@focusmcp/core` et parle **stdio MCP** (via `@modelcontextprotocol/sdk`) aux
 clients AI (Claude Code, Cursor, Codex, Gemini CLI…).
 
-## Écosystème (4 repos actifs + 1 archivé)
+## Écosystème (3 repos actifs + 1 archivé)
 
 | Repo | Rôle |
 |---|---|
@@ -60,9 +60,11 @@ AI client (Claude Code, Cursor, Codex, Gemini…)
 3. **Standards pro** — TS strict (pas de `any`), Biome, Conventional Commits, husky + lint-staged,
    semver, SPDX headers (REUSE), ADRs pour les décisions archi.
 4. **Imports** : `node:` protocol systématique.
-5. **Public-facing content en anglais** — `.github/`, PR/issue titles+bodies, commits, docs
-   contributor-facing (README, AGENTS, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT). Seule exception :
-   `PRD.md` reste en français.
+5. **Public-facing content en anglais** — règle "à partir de maintenant". Périmètre :
+   `.github/`, PR/issue titles+bodies, commits, docs contributor-facing (README, AGENTS,
+   CONTRIBUTING, SECURITY, CODE_OF_CONDUCT). Les docs existantes peuvent rester majoritairement
+   en français jusqu'à leur prochaine réécriture substantielle. Exceptions permanentes :
+   `PRD.md` et `CLAUDE.md` (ce fichier) restent en français (docs internes).
 6. **Git-flow strict** — `develop` est **permanente**, jamais `--delete-branch` sur PR
    `develop→main`.
 7. **npm orgs** — `focusmcp` + `focus-mcp` réservées (squatting). `@focusmcp/cli` est LE package
@@ -82,7 +84,8 @@ AI client (Claude Code, Cursor, Codex, Gemini…)
 
 **Dépendance critique** : `@focusmcp/core` est consommé via `file:../core/packages/core`. Cela
 implique :
-- **Dev local** : le user doit avoir `focus-mcp/core` cloné à côté (`F:\Project\focus-mcp\core`).
+- **Dev local** : le user doit avoir `focus-mcp/core` cloné comme repo sibling de ce repo
+  (layout attendu : `../core`, avec le package à `../core/packages/core`). Indépendant de l'OS.
 - **CI** : action composite `.github/actions/setup` qui clone `focus-mcp/core` comme sibling,
   le build (pnpm filter), puis install ce repo.
 - **Publish npm** : `tsup --noExternal '@focusmcp/core'` bundle le core dans le dist de la CLI,
@@ -101,7 +104,7 @@ pnpm changeset   # avant toute PR qui change l'API publique
 **Commandes CLI publiques** (MVP) :
 - `focus list` — liste les briques installées (lit `~/.focus/center.json` + `center.lock`)
 - `focus info <name>` — détails d'une brique
-- `focus start` — stub pour le moment, lance stdio MCP via @mcp/sdk (prochain PR)
+- `focus start` — stub pour le moment, lance stdio MCP via `@modelcontextprotocol/sdk` (prochain PR)
 - `focus add/remove/update/search` — P1
 
 ## Workflow pour une feature
