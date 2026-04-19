@@ -4,7 +4,7 @@
 
 # Secret scanning
 if command -v gitleaks >/dev/null 2>&1; then
-  gitleaks protect --staged --redact --verbose --config config/gitleaks.toml
+  gitleaks protect --staged --redact --verbose --config config/gitleaks.toml || exit $?
 else
   echo "⚠️  gitleaks not installed — install via https://github.com/gitleaks/gitleaks"
 fi
