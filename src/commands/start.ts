@@ -16,6 +16,30 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { parseCenterJson } from '../center.ts';
 import { FilesystemBrickSource } from '../source/filesystem-source.ts';
 
+const minimalLogger = {
+    trace() {},
+    debug() {},
+    info() {},
+    warn() {},
+    error() {},
+};
+
+async function loadSingleBrick(brickName: string, bricksDir: string): Promise<Brick> {
+    const source = new FilesystemBrickSource({
+        centerJson: { bricks: { [brickName]: { version: '*', enabled: true } } },
+        bricksDir,
+    });
+    const result = await loadBricks({ source });
+    if (result.failures.length > 0) {
+        throw result.failures[0]?.error;
+    }
+    const first = result.bricks[0];
+    if (!first) {
+        throw new Error(`No brick loaded for "${brickName}"`);
+    }
+    return first;
+}
+
 export async function startCommand(argv: string[] = []): Promise<void> {
     const { values } = parseArgs({
         args: argv,
@@ -35,14 +59,13 @@ export async function startCommand(argv: string[] = []): Promise<void> {
 
     const focusDir = join(homedir(), '.focus');
     let bricks: Brick[] = [];
+    const activeBricksDir = process.env['FOCUSMCP_BRICKS_DIR'] ?? join(focusDir, 'bricks');
 
     try {
         const raw = await readFile(join(focusDir, 'center.json'), 'utf-8');
         const centerJson = parseCenterJson(JSON.parse(raw));
 
-        const bricksDir = process.env['FOCUSMCP_BRICKS_DIR'] ?? join(focusDir, 'bricks');
-
-        const source = new FilesystemBrickSource({ centerJson, bricksDir });
+        const source = new FilesystemBrickSource({ centerJson, bricksDir: activeBricksDir });
         const result = await loadBricks({ source });
 
         bricks = [...result.bricks];
@@ -108,6 +131,17 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                     additionalProperties: false,
                 },
             },
+            {
+                name: 'focus_reload',
+                description:
+                    'Reload a brick — stop, reimport from disk, restart. Tools are updated immediately.',
+                inputSchema: {
+                    type: 'object',
+                    properties: { name: { type: 'string', description: 'Brick name to reload' } },
+                    required: ['name'],
+                    additionalProperties: false,
+                },
+            },
         ],
     }));
 
@@ -130,14 +164,51 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         }
 
         if (name === 'focus_load') {
-            return {
-                content: [
-                    {
-                        type: 'text' as const,
-                        text: 'Load not yet implemented. Use focus start with center.json to load bricks at startup.',
-                    },
-                ],
-            };
+            const brickName = (args as Record<string, unknown>)?.['name'];
+            if (typeof brickName !== 'string' || brickName.trim() === '') {
+                return {
+                    content: [{ type: 'text' as const, text: 'Missing or invalid brick name.' }],
+                    isError: true,
+                };
+            }
+            if (focusMcp.registry.getBrick(brickName)) {
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `Brick "${brickName}" is already loaded.`,
+                        },
+                    ],
+                    isError: true,
+                };
+            }
+            try {
+                const brick = await loadSingleBrick(brickName, activeBricksDir);
+                focusMcp.registry.register(brick);
+                const ctx = { bus: focusMcp.bus, config: {}, logger: minimalLogger };
+                await brick.start(ctx);
+                focusMcp.registry.setStatus(brickName, 'running');
+                await server.sendToolListChanged();
+                const toolNames = brick.manifest.tools.map((t) => t.name).join(', ');
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `Brick "${brickName}" loaded. Tools: ${toolNames}`,
+                        },
+                    ],
+                };
+            } catch (err) {
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `Failed to load "${brickName}": ${err instanceof Error ? err.message : String(err)}`,
+                        },
+                    ],
+                    isError: true,
+                };
+            }
         }
 
         if (name === 'focus_unload') {
@@ -159,6 +230,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 await brick.stop();
                 focusMcp.registry.setStatus(brickName, 'stopped');
                 focusMcp.registry.unregister(brickName);
+                await server.sendToolListChanged();
                 return {
                     content: [
                         {
@@ -173,6 +245,52 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                         {
                             type: 'text' as const,
                             text: `Failed to unload "${brickName}": ${err instanceof Error ? err.message : String(err)}`,
+                        },
+                    ],
+                    isError: true,
+                };
+            }
+        }
+
+        if (name === 'focus_reload') {
+            const brickName = (args as Record<string, unknown>)?.['name'];
+            if (typeof brickName !== 'string' || brickName.trim() === '') {
+                return {
+                    content: [{ type: 'text' as const, text: 'Missing or invalid brick name.' }],
+                    isError: true,
+                };
+            }
+            const existing = focusMcp.registry.getBrick(brickName);
+            if (!existing) {
+                return {
+                    content: [{ type: 'text' as const, text: `Brick "${brickName}" not found.` }],
+                    isError: true,
+                };
+            }
+            try {
+                await existing.stop();
+                focusMcp.registry.unregister(brickName);
+                const brick = await loadSingleBrick(brickName, activeBricksDir);
+                focusMcp.registry.register(brick);
+                const ctx = { bus: focusMcp.bus, config: {}, logger: minimalLogger };
+                await brick.start(ctx);
+                focusMcp.registry.setStatus(brickName, 'running');
+                await server.sendToolListChanged();
+                const toolNames = brick.manifest.tools.map((t) => t.name).join(', ');
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `Brick "${brickName}" reloaded. Tools: ${toolNames}`,
+                        },
+                    ],
+                };
+            } catch (err) {
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `Failed to reload "${brickName}": ${err instanceof Error ? err.message : String(err)}`,
                         },
                     ],
                     isError: true,

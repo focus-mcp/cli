@@ -53,12 +53,13 @@ export class FilesystemBrickSource implements BrickSource {
     async loadModule(name: string): Promise<unknown> {
         const brickName = safeBrickName(name);
         const distPath = safeBrickPath(this.#bricksDir, brickName, 'dist', 'index.js');
+        const cacheBuster = `?t=${Date.now()}`;
         try {
             await access(distPath);
-            return import(distPath);
+            return import(`${distPath}${cacheBuster}`);
         } catch {
             const srcPath = safeBrickPath(this.#bricksDir, brickName, 'src', 'index.ts');
-            return import(srcPath);
+            return import(`${srcPath}${cacheBuster}`);
         }
     }
 }
