@@ -11,6 +11,7 @@ const {
     mockCallTool,
     mockConnect,
     mockSetRequestHandler,
+    mockSendToolListChanged,
     mockStreamableTransportCtor,
     mockListen,
     mockOnce,
@@ -24,6 +25,7 @@ const {
     mockGetBrick,
     mockSetStatus,
     mockUnregister,
+    mockRegister,
 } = vi.hoisted(() => {
     const mockListen = vi.fn();
     const mockOnce = vi.fn();
@@ -46,6 +48,7 @@ const {
         mockCallTool: vi.fn().mockResolvedValue({ content: [] }),
         mockConnect: vi.fn().mockResolvedValue(undefined),
         mockSetRequestHandler: vi.fn(),
+        mockSendToolListChanged: vi.fn().mockResolvedValue(undefined),
         mockStreamableTransportCtor,
         mockListen,
         mockOnce,
@@ -59,6 +62,7 @@ const {
         mockGetBrick: vi.fn().mockReturnValue(undefined),
         mockSetStatus: vi.fn(),
         mockUnregister: vi.fn(),
+        mockRegister: vi.fn(),
     };
 });
 
@@ -73,6 +77,7 @@ vi.mock('@focusmcp/core', () => ({
             getBrick: mockGetBrick,
             setStatus: mockSetStatus,
             unregister: mockUnregister,
+            register: mockRegister,
         },
         bus: {},
     }),
@@ -95,6 +100,7 @@ vi.mock('@modelcontextprotocol/sdk/server/index.js', () => ({
     Server: class MockServer {
         connect = mockConnect;
         setRequestHandler = mockSetRequestHandler;
+        sendToolListChanged = mockSendToolListChanged;
     },
 }));
 
@@ -156,6 +162,9 @@ describe('startCommand', () => {
         mockGetBrick.mockReturnValue(undefined);
         mockSetStatus.mockReset();
         mockUnregister.mockReset();
+        mockRegister.mockReset();
+        mockSendToolListChanged.mockReset();
+        mockSendToolListChanged.mockResolvedValue(undefined);
     });
 
     afterEach(() => {
@@ -224,6 +233,35 @@ describe('startCommand', () => {
         void promise;
     });
 
+    it('cleanup handler logs error to stderr when focusMcp.stop() throws', async () => {
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+        mockStop.mockRejectedValue(new Error('stop failed'));
+
+        const registeredHandlers: Array<[string, () => Promise<void>]> = [];
+        // @ts-expect-error — mock overload for process.once signal handlers
+        vi.spyOn(process, 'once').mockImplementation((event: string, handler: unknown) => {
+            registeredHandlers.push([event, handler as () => Promise<void>]);
+            return process;
+        });
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const sigintEntry = registeredHandlers.find(([ev]) => ev === 'SIGINT');
+        if (!sigintEntry) throw new Error('SIGINT handler not registered');
+        const cleanup = sigintEntry[1];
+
+        await cleanup();
+
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            expect.stringContaining('Shutdown error: stop failed'),
+        );
+        expect(exitSpy).toHaveBeenCalledWith(0);
+
+        void promise;
+    });
+
     it('ListTools handler returns mapped tools from router', async () => {
         mockListTools.mockReturnValue([
             {
@@ -247,7 +285,7 @@ describe('startCommand', () => {
         const handler = listToolsCall[1] as () => Promise<{ tools: unknown[] }>;
         const result = await handler();
 
-        // Should include the brick tool + 3 internal tools
+        // Should include the brick tool + 4 internal tools
         expect(result.tools).toEqual(
             expect.arrayContaining([
                 {
@@ -258,9 +296,10 @@ describe('startCommand', () => {
                 expect.objectContaining({ name: 'focus_list' }),
                 expect.objectContaining({ name: 'focus_load' }),
                 expect.objectContaining({ name: 'focus_unload' }),
+                expect.objectContaining({ name: 'focus_reload' }),
             ]),
         );
-        expect((result.tools as unknown[]).length).toBe(4);
+        expect((result.tools as unknown[]).length).toBe(5);
 
         void promise;
     });
@@ -467,6 +506,141 @@ describe('startCommand', () => {
         expect(transport.handleRequest).toHaveBeenCalledWith(expect.anything(), fakeRes, undefined);
     });
 
+    it('HTTP server handler returns 400 when body is invalid JSON', async () => {
+        mockListen.mockImplementation((_port: number, cb: () => void) => {
+            cb();
+        });
+        mockOnce.mockImplementation(() => {});
+
+        const { startCommand } = await import('./start.ts');
+        startCommand(['--http', '--port', '4000']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const call = mockCreateServer.mock.calls[0];
+        if (!call) throw new Error('createServer not called');
+        const requestHandler = call[0] as (
+            req: AsyncIterable<string>,
+            res: {
+                writeHead: ReturnType<typeof vi.fn>;
+                end: ReturnType<typeof vi.fn>;
+            },
+        ) => Promise<void>;
+
+        async function* invalidJsonReq(): AsyncGenerator<string> {
+            yield 'not valid json {{{';
+        }
+        const fakeRes = {
+            writeHead: vi.fn(),
+            end: vi.fn(),
+        };
+
+        await requestHandler(invalidJsonReq() as unknown as AsyncIterable<string>, fakeRes);
+
+        expect(fakeRes.writeHead).toHaveBeenCalledWith(400, { 'Content-Type': 'application/json' });
+        expect(fakeRes.end).toHaveBeenCalledWith(JSON.stringify({ error: 'Invalid JSON' }));
+    });
+
+    it('HTTP server handler returns 413 when body exceeds 1MB', async () => {
+        mockListen.mockImplementation((_port: number, cb: () => void) => {
+            cb();
+        });
+        mockOnce.mockImplementation(() => {});
+
+        const { startCommand } = await import('./start.ts');
+        startCommand(['--http', '--port', '4000']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const call = mockCreateServer.mock.calls[0];
+        if (!call) throw new Error('createServer not called');
+        const requestHandler = call[0] as (
+            req: AsyncIterable<string>,
+            res: {
+                writeHead: ReturnType<typeof vi.fn>;
+                end: ReturnType<typeof vi.fn>;
+            },
+        ) => Promise<void>;
+
+        // Generate a body larger than 1MB
+        const largeChunk = 'x'.repeat(1024 * 1024 + 1);
+        async function* largeReq(): AsyncGenerator<string> {
+            yield largeChunk;
+        }
+        const fakeRes = {
+            writeHead: vi.fn(),
+            end: vi.fn(),
+        };
+
+        await requestHandler(largeReq() as unknown as AsyncIterable<string>, fakeRes);
+
+        expect(fakeRes.writeHead).toHaveBeenCalledWith(413, { 'Content-Type': 'application/json' });
+        expect(fakeRes.end).toHaveBeenCalledWith(JSON.stringify({ error: 'Payload too large' }));
+    });
+
+    it('logs stdio server started message in stdio mode', async () => {
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(process.stderr.write).toHaveBeenCalledWith('FocusMCP stdio MCP server started\n');
+
+        void promise;
+    });
+
+    it('loadSingleBrick throws when loadBricks returns a failure', async () => {
+        mockGetBrick.mockReturnValue(undefined);
+        mockLoadBricks.mockResolvedValue({
+            bricks: [],
+            failures: [{ name: 'my-brick', error: new Error('no brick loaded') }],
+        });
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const callToolCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'CallToolRequestSchema',
+        );
+        if (!callToolCall) throw new Error('CallTool handler not registered');
+        const handler = callToolCall[1] as (req: {
+            params: { name: string; arguments?: Record<string, unknown> };
+        }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+        const result = await handler({
+            params: { name: 'focus_load', arguments: { name: 'my-brick' } },
+        });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0]?.text).toContain('no brick loaded');
+
+        void promise;
+    });
+
+    it('loadSingleBrick throws when loadBricks returns 0 bricks and no failures', async () => {
+        mockGetBrick.mockReturnValue(undefined);
+        mockLoadBricks.mockResolvedValue({ bricks: [], failures: [] });
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const callToolCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'CallToolRequestSchema',
+        );
+        if (!callToolCall) throw new Error('CallTool handler not registered');
+        const handler = callToolCall[1] as (req: {
+            params: { name: string; arguments?: Record<string, unknown> };
+        }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+        const result = await handler({
+            params: { name: 'focus_load', arguments: { name: 'ghost-brick' } },
+        });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0]?.text).toContain('Failed to load');
+
+        void promise;
+    });
+
     it('logs "starting with 0 bricks" when center.json does not exist', async () => {
         mockReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
 
@@ -615,7 +789,7 @@ describe('startCommand', () => {
             void promise;
         });
 
-        it('focus_load returns stub message', async () => {
+        it('focus_load returns error when brick name is missing', async () => {
             const { startCommand } = await import('./start.ts');
             const promise = startCommand([]);
             await new Promise((r) => setTimeout(r, 10));
@@ -626,15 +800,111 @@ describe('startCommand', () => {
             if (!callToolCall) throw new Error('CallTool handler not registered');
             const handler = callToolCall[1] as (req: {
                 params: { name: string; arguments?: Record<string, unknown> };
-            }) => Promise<{ content: Array<{ type: string; text: string }> }>;
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({ params: { name: 'focus_load', arguments: {} } });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Missing or invalid brick name');
+            expect(mockCallTool).not.toHaveBeenCalled();
+
+            void promise;
+        });
+
+        it('focus_load returns error when brick is already loaded', async () => {
+            const fakeBrick = {
+                manifest: { name: 'echo', tools: [{ name: 'echo_say' }] },
+                start: vi.fn().mockResolvedValue(undefined),
+                stop: vi.fn().mockResolvedValue(undefined),
+            };
+            mockGetBrick.mockReturnValue(fakeBrick);
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
                 params: { name: 'focus_load', arguments: { name: 'echo' } },
             });
 
-            expect(result.content[0]?.type).toBe('text');
-            expect(result.content[0]?.text).toContain('not yet implemented');
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('already loaded');
             expect(mockCallTool).not.toHaveBeenCalled();
+
+            void promise;
+        });
+
+        it('focus_load loads a brick, registers, starts it and sends notification', async () => {
+            const fakeBrick = {
+                manifest: { name: 'echo', tools: [{ name: 'echo_say' }] },
+                start: vi.fn().mockResolvedValue(undefined),
+                stop: vi.fn().mockResolvedValue(undefined),
+            };
+            mockGetBrick.mockReturnValue(undefined);
+            mockLoadBricks.mockResolvedValue({ bricks: [fakeBrick], failures: [] });
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({
+                params: { name: 'focus_load', arguments: { name: 'echo' } },
+            });
+
+            expect(result.isError).toBeUndefined();
+            expect(mockRegister).toHaveBeenCalledWith(fakeBrick);
+            expect(fakeBrick.start).toHaveBeenCalledOnce();
+            expect(mockSetStatus).toHaveBeenCalledWith('echo', 'running');
+            expect(mockSendToolListChanged).toHaveBeenCalledOnce();
+            expect(result.content[0]?.text).toContain('echo');
+            expect(result.content[0]?.text).toContain('echo_say');
+            expect(mockCallTool).not.toHaveBeenCalled();
+
+            void promise;
+        });
+
+        it('focus_load returns error when loadSingleBrick fails', async () => {
+            mockGetBrick.mockReturnValue(undefined);
+            mockLoadBricks.mockResolvedValue({
+                bricks: [],
+                failures: [{ name: 'echo', error: new Error('disk error') }],
+            });
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({
+                params: { name: 'focus_load', arguments: { name: 'echo' } },
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Failed to load');
+            expect(result.content[0]?.text).toContain('disk error');
 
             void promise;
         });
@@ -694,6 +964,7 @@ describe('startCommand', () => {
             expect(mockBrickStop).toHaveBeenCalledOnce();
             expect(mockSetStatus).toHaveBeenCalledWith('echo', 'stopped');
             expect(mockUnregister).toHaveBeenCalledWith('echo');
+            expect(mockSendToolListChanged).toHaveBeenCalledOnce();
             expect(result.content[0]?.text).toContain('unloaded successfully');
             expect(mockCallTool).not.toHaveBeenCalled();
 
@@ -717,6 +988,98 @@ describe('startCommand', () => {
 
             expect(result.isError).toBe(true);
             expect(result.content[0]?.text).toContain('Missing or invalid brick name');
+
+            void promise;
+        });
+
+        it('focus_reload returns error when brick name is missing', async () => {
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({ params: { name: 'focus_reload', arguments: {} } });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Missing or invalid brick name');
+
+            void promise;
+        });
+
+        it('focus_reload returns error when brick is not found', async () => {
+            mockGetBrick.mockReturnValue(undefined);
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({
+                params: { name: 'focus_reload', arguments: { name: 'unknown-brick' } },
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('not found');
+            expect(mockCallTool).not.toHaveBeenCalled();
+
+            void promise;
+        });
+
+        it('focus_reload stops, reimports, restarts and sends notification', async () => {
+            const mockBrickStop = vi.fn().mockResolvedValue(undefined);
+            const existingBrick = {
+                manifest: { name: 'echo', tools: [{ name: 'echo_say' }] },
+                start: vi.fn().mockResolvedValue(undefined),
+                stop: mockBrickStop,
+            };
+            const newBrick = {
+                manifest: { name: 'echo', tools: [{ name: 'echo_say' }, { name: 'echo_shout' }] },
+                start: vi.fn().mockResolvedValue(undefined),
+                stop: vi.fn().mockResolvedValue(undefined),
+            };
+            mockGetBrick.mockReturnValue(existingBrick);
+            mockLoadBricks.mockResolvedValue({ bricks: [newBrick], failures: [] });
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({
+                params: { name: 'focus_reload', arguments: { name: 'echo' } },
+            });
+
+            expect(result.isError).toBeUndefined();
+            expect(mockBrickStop).toHaveBeenCalledOnce();
+            expect(mockUnregister).toHaveBeenCalledWith('echo');
+            expect(mockRegister).toHaveBeenCalledWith(newBrick);
+            expect(newBrick.start).toHaveBeenCalledOnce();
+            expect(mockSetStatus).toHaveBeenCalledWith('echo', 'running');
+            expect(mockSendToolListChanged).toHaveBeenCalledOnce();
+            expect(result.content[0]?.text).toContain('reloaded');
+            expect(result.content[0]?.text).toContain('echo_say');
+            expect(mockCallTool).not.toHaveBeenCalled();
 
             void promise;
         });
