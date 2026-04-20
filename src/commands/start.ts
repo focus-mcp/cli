@@ -301,12 +301,23 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         // Brick tools (existing dispatch)
         try {
             const result = await focusMcp.router.callTool(name, args ?? {});
+            if (
+                result &&
+                typeof result === 'object' &&
+                'content' in result &&
+                Array.isArray(result.content)
+            ) {
+                return {
+                    content: result.content.map(
+                        (item: { type: string; text?: string; data?: unknown }) =>
+                            item.type === 'text'
+                                ? { type: 'text' as const, text: item.text ?? '' }
+                                : { type: 'text' as const, text: JSON.stringify(item.data) },
+                    ),
+                };
+            }
             return {
-                content: result.content.map((item) =>
-                    item.type === 'text'
-                        ? { type: 'text' as const, text: item.text }
-                        : { type: 'text' as const, text: JSON.stringify(item.data) },
-                ),
+                content: [{ type: 'text' as const, text: JSON.stringify(result) }],
             };
         } catch (err) {
             return {
