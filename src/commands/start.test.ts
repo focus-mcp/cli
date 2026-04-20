@@ -293,10 +293,10 @@ describe('startCommand', () => {
                     description: 'Says something',
                     inputSchema: { type: 'object', properties: {} },
                 },
-                expect.objectContaining({ name: 'focus_list' }),
-                expect.objectContaining({ name: 'focus_load' }),
-                expect.objectContaining({ name: 'focus_unload' }),
-                expect.objectContaining({ name: 'focus_reload' }),
+                expect.objectContaining({ name: 'focusmcp_list' }),
+                expect.objectContaining({ name: 'focusmcp_load' }),
+                expect.objectContaining({ name: 'focusmcp_unload' }),
+                expect.objectContaining({ name: 'focusmcp_reload' }),
             ]),
         );
         expect((result.tools as unknown[]).length).toBe(5);
@@ -606,7 +606,7 @@ describe('startCommand', () => {
         }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
         const result = await handler({
-            params: { name: 'focus_load', arguments: { name: 'my-brick' } },
+            params: { name: 'focusmcp_load', arguments: { name: 'my-brick' } },
         });
 
         expect(result.isError).toBe(true);
@@ -632,7 +632,7 @@ describe('startCommand', () => {
         }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
         const result = await handler({
-            params: { name: 'focus_load', arguments: { name: 'ghost-brick' } },
+            params: { name: 'focusmcp_load', arguments: { name: 'ghost-brick' } },
         });
 
         expect(result.isError).toBe(true);
@@ -743,7 +743,7 @@ describe('startCommand', () => {
                 params: { name: string; arguments?: Record<string, unknown> };
             }) => Promise<{ content: unknown[] }>;
 
-            const result = await handler({ params: { name: 'focus_list', arguments: {} } });
+            const result = await handler({ params: { name: 'focusmcp_list', arguments: {} } });
 
             expect(result).toEqual({
                 content: [{ type: 'text', text: 'No bricks loaded.' }],
@@ -778,7 +778,7 @@ describe('startCommand', () => {
                 params: { name: string; arguments?: Record<string, unknown> };
             }) => Promise<{ content: Array<{ type: string; text: string }> }>;
 
-            const result = await handler({ params: { name: 'focus_list', arguments: {} } });
+            const result = await handler({ params: { name: 'focusmcp_list', arguments: {} } });
 
             expect(result.content[0]?.type).toBe('text');
             expect(result.content[0]?.text).toContain('echo');
@@ -802,7 +802,7 @@ describe('startCommand', () => {
                 params: { name: string; arguments?: Record<string, unknown> };
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
-            const result = await handler({ params: { name: 'focus_load', arguments: {} } });
+            const result = await handler({ params: { name: 'focusmcp_load', arguments: {} } });
 
             expect(result.isError).toBe(true);
             expect(result.content[0]?.text).toContain('Missing or invalid brick name');
@@ -832,7 +832,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_load', arguments: { name: 'echo' } },
+                params: { name: 'focusmcp_load', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBe(true);
@@ -864,7 +864,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_load', arguments: { name: 'echo' } },
+                params: { name: 'focusmcp_load', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBeUndefined();
@@ -899,7 +899,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_load', arguments: { name: 'echo' } },
+                params: { name: 'focusmcp_load', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBe(true);
@@ -925,7 +925,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_unload', arguments: { name: 'unknown-brick' } },
+                params: { name: 'focusmcp_unload', arguments: { name: 'unknown-brick' } },
             });
 
             expect(result.isError).toBe(true);
@@ -957,7 +957,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_unload', arguments: { name: 'echo' } },
+                params: { name: 'focusmcp_unload', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBeUndefined();
@@ -984,7 +984,7 @@ describe('startCommand', () => {
                 params: { name: string; arguments?: Record<string, unknown> };
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
-            const result = await handler({ params: { name: 'focus_unload', arguments: {} } });
+            const result = await handler({ params: { name: 'focusmcp_unload', arguments: {} } });
 
             expect(result.isError).toBe(true);
             expect(result.content[0]?.text).toContain('Missing or invalid brick name');
@@ -1005,7 +1005,7 @@ describe('startCommand', () => {
                 params: { name: string; arguments?: Record<string, unknown> };
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
-            const result = await handler({ params: { name: 'focus_reload', arguments: {} } });
+            const result = await handler({ params: { name: 'focusmcp_reload', arguments: {} } });
 
             expect(result.isError).toBe(true);
             expect(result.content[0]?.text).toContain('Missing or invalid brick name');
@@ -1029,7 +1029,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_reload', arguments: { name: 'unknown-brick' } },
+                params: { name: 'focusmcp_reload', arguments: { name: 'unknown-brick' } },
             });
 
             expect(result.isError).toBe(true);
@@ -1067,7 +1067,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_reload', arguments: { name: 'echo' } },
+                params: { name: 'focusmcp_reload', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBeUndefined();

@@ -106,12 +106,12 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 inputSchema: t.inputSchema,
             })),
             {
-                name: 'focus_list',
+                name: 'focusmcp_list',
                 description: 'List all loaded bricks and their tools',
                 inputSchema: { type: 'object', properties: {}, additionalProperties: false },
             },
             {
-                name: 'focus_load',
+                name: 'focusmcp_load',
                 description:
                     'Load (activate) an installed brick — its tools become available immediately',
                 inputSchema: {
@@ -122,7 +122,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 },
             },
             {
-                name: 'focus_unload',
+                name: 'focusmcp_unload',
                 description:
                     'Unload (deactivate) a running brick — its tools are removed immediately',
                 inputSchema: {
@@ -133,7 +133,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 },
             },
             {
-                name: 'focus_reload',
+                name: 'focusmcp_reload',
                 description:
                     'Reload a brick — stop, reimport from disk, restart. Tools are updated immediately.',
                 inputSchema: {
@@ -151,7 +151,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         const { name, arguments: args } = req.params;
 
         // Internal tools — handled before dispatching to brick router
-        if (name === 'focus_list') {
+        if (name === 'focusmcp_list') {
             const bricks = focusMcp.registry.getBricks();
             if (bricks.length === 0) {
                 return { content: [{ type: 'text' as const, text: 'No bricks loaded.' }] };
@@ -164,7 +164,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
             return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
         }
 
-        if (name === 'focus_load') {
+        if (name === 'focusmcp_load') {
             const brickName = (args as Record<string, unknown>)?.['name'];
             if (typeof brickName !== 'string' || brickName.trim() === '') {
                 return {
@@ -212,7 +212,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
             }
         }
 
-        if (name === 'focus_unload') {
+        if (name === 'focusmcp_unload') {
             const brickName = (args as Record<string, unknown>)?.['name'];
             if (typeof brickName !== 'string' || brickName.trim() === '') {
                 return {
@@ -253,7 +253,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
             }
         }
 
-        if (name === 'focus_reload') {
+        if (name === 'focusmcp_reload') {
             const brickName = (args as Record<string, unknown>)?.['name'];
             if (typeof brickName !== 'string' || brickName.trim() === '') {
                 return {
