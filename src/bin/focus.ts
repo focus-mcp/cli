@@ -80,7 +80,7 @@ async function main(argv: string[]): Promise<number> {
             return 0;
         }
         case 'start': {
-            await startCommand();
+            await startCommand(rest);
             return 0;
         }
         default: {
