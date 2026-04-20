@@ -17,6 +17,8 @@ const {
     mockHttpServer,
     mockCreateServer,
     lastTransportInstance,
+    mockLoadBricks,
+    mockReadFile,
 } = vi.hoisted(() => {
     const mockListen = vi.fn();
     const mockOnce = vi.fn();
@@ -28,6 +30,10 @@ const {
     };
     // The constructor mock — exposed so we can restore mockImplementation after vi.restoreAllMocks()
     const mockStreamableTransportCtor = vi.fn();
+    const mockLoadBricks = vi.fn().mockResolvedValue({ bricks: [], failures: [] });
+    const mockReadFile = vi
+        .fn()
+        .mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
     return {
         mockStop: vi.fn().mockResolvedValue(undefined),
         mockStart: vi.fn().mockResolvedValue(undefined),
@@ -41,6 +47,8 @@ const {
         mockHttpServer,
         mockCreateServer,
         lastTransportInstance,
+        mockLoadBricks,
+        mockReadFile,
     };
 });
 
@@ -52,6 +60,19 @@ vi.mock('@focusmcp/core', () => ({
         registry: {},
         bus: {},
     }),
+    loadBricks: mockLoadBricks,
+}));
+
+vi.mock('node:fs/promises', () => ({
+    readFile: mockReadFile,
+}));
+
+vi.mock('node:os', () => ({
+    homedir: () => '/home/testuser',
+}));
+
+vi.mock('../source/filesystem-source.ts', () => ({
+    FilesystemBrickSource: vi.fn().mockImplementation(() => ({})),
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/index.js', () => ({
@@ -107,10 +128,16 @@ describe('startCommand', () => {
         mockCreateServer.mockReturnValue(mockHttpServer);
         // Re-apply implementation in case vi.restoreAllMocks() cleared it
         setupStreamableTransportMock();
+        mockReadFile.mockReset();
+        mockReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+        mockLoadBricks.mockReset();
+        mockLoadBricks.mockResolvedValue({ bricks: [], failures: [] });
     });
 
     afterEach(() => {
         vi.restoreAllMocks();
+        mockReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+        mockLoadBricks.mockResolvedValue({ bricks: [], failures: [] });
     });
 
     it('starts FocusMcp, connects transport and registers MCP handlers', async () => {
@@ -409,5 +436,91 @@ describe('startCommand', () => {
 
         if (!transport) throw new Error('transport not captured');
         expect(transport.handleRequest).toHaveBeenCalledWith(expect.anything(), fakeRes, undefined);
+    });
+
+    it('logs "starting with 0 bricks" when center.json does not exist', async () => {
+        mockReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            'No center.json found — starting with 0 bricks\n',
+        );
+
+        void promise;
+    });
+
+    it('loads bricks from center.json and passes them to createFocusMcp', async () => {
+        const fakeBrick = { manifest: { name: 'test-brick' }, start: vi.fn(), stop: vi.fn() };
+        mockLoadBricks.mockResolvedValue({ bricks: [fakeBrick], failures: [] });
+
+        const centerJson = JSON.stringify({
+            bricks: {
+                'catalog/test-brick': { version: '^1.0.0', enabled: true },
+            },
+        });
+        mockReadFile.mockResolvedValue(centerJson);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(mockLoadBricks).toHaveBeenCalledOnce();
+        expect(process.stderr.write).toHaveBeenCalledWith('Loaded 1 brick(s)\n');
+
+        void promise;
+    });
+
+    it('logs brick load failures without stopping', async () => {
+        const fakeBrick = { manifest: { name: 'ok-brick' }, start: vi.fn(), stop: vi.fn() };
+        const failure = { name: 'catalog/bad-brick', error: new Error('load error') };
+        mockLoadBricks.mockResolvedValue({ bricks: [fakeBrick], failures: [failure] });
+
+        const centerJson = JSON.stringify({
+            bricks: {
+                'catalog/ok-brick': { version: '^1.0.0', enabled: true },
+                'catalog/bad-brick': { version: '^1.0.0', enabled: true },
+            },
+        });
+        mockReadFile.mockResolvedValue(centerJson);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            '⚠ Failed to load brick "catalog/bad-brick": load error\n',
+        );
+        expect(process.stderr.write).toHaveBeenCalledWith('Loaded 1 brick(s)\n');
+
+        void promise;
+    });
+
+    it('uses FOCUSMCP_BRICKS_DIR env var when set', async () => {
+        const { FilesystemBrickSource } = await import('../source/filesystem-source.ts');
+        const originalEnv = process.env['FOCUSMCP_BRICKS_DIR'];
+
+        process.env['FOCUSMCP_BRICKS_DIR'] = '/custom/bricks/dir';
+
+        const centerJson = JSON.stringify({ bricks: {} });
+        mockReadFile.mockResolvedValue(centerJson);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(FilesystemBrickSource).toHaveBeenCalledWith(
+            expect.objectContaining({ bricksDir: '/custom/bricks/dir' }),
+        );
+
+        if (originalEnv === undefined) {
+            delete process.env['FOCUSMCP_BRICKS_DIR'];
+        } else {
+            process.env['FOCUSMCP_BRICKS_DIR'] = originalEnv;
+        }
+
+        void promise;
     });
 });

@@ -1,14 +1,20 @@
 // SPDX-FileCopyrightText: 2026 FocusMCP contributors
 // SPDX-License-Identifier: MIT
 
+import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { createFocusMcp } from '@focusmcp/core';
+import type { Brick } from '@focusmcp/core';
+import { createFocusMcp, loadBricks } from '@focusmcp/core';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { parseCenterJson } from '../center.ts';
+import { FilesystemBrickSource } from '../source/filesystem-source.ts';
 
 export async function startCommand(argv: string[] = []): Promise<void> {
     const { values } = parseArgs({
@@ -27,7 +33,40 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         throw new Error(`Invalid port: ${values['port']}. Must be 1-65535.`);
     }
 
-    const focusMcp = createFocusMcp();
+    const focusDir = join(homedir(), '.focus');
+    let bricks: Brick[] = [];
+
+    try {
+        const raw = await readFile(join(focusDir, 'center.json'), 'utf-8');
+        const centerJson = parseCenterJson(JSON.parse(raw));
+
+        const bricksDir = process.env['FOCUSMCP_BRICKS_DIR'] ?? join(focusDir, 'bricks');
+
+        const source = new FilesystemBrickSource({ centerJson, bricksDir });
+        const result = await loadBricks({ source });
+
+        bricks = [...result.bricks];
+
+        for (const failure of result.failures) {
+            process.stderr.write(
+                `⚠ Failed to load brick "${failure.name}": ${failure.error.message}\n`,
+            );
+        }
+
+        process.stderr.write(`Loaded ${bricks.length} brick(s)\n`);
+    } catch (err: unknown) {
+        const isNotFound =
+            err instanceof Error && 'code' in err && (err as { code: string }).code === 'ENOENT';
+        if (isNotFound) {
+            process.stderr.write('No center.json found — starting with 0 bricks\n');
+        } else {
+            process.stderr.write(
+                `Failed to load bricks: ${err instanceof Error ? err.message : String(err)}\n`,
+            );
+        }
+    }
+
+    const focusMcp = createFocusMcp({ bricks });
     await focusMcp.start();
 
     const server = new Server(
