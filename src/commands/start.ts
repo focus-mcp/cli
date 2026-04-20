@@ -54,8 +54,16 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         }
 
         process.stderr.write(`Loaded ${bricks.length} brick(s)\n`);
-    } catch {
-        process.stderr.write('No center.json found — starting with 0 bricks\n');
+    } catch (err: unknown) {
+        const isNotFound =
+            err instanceof Error && 'code' in err && (err as { code: string }).code === 'ENOENT';
+        if (isNotFound) {
+            process.stderr.write('No center.json found — starting with 0 bricks\n');
+        } else {
+            process.stderr.write(
+                `Failed to load bricks: ${err instanceof Error ? err.message : String(err)}\n`,
+            );
+        }
     }
 
     const focusMcp = createFocusMcp({ bricks });
