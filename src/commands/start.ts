@@ -23,6 +23,9 @@ export async function startCommand(argv: string[] = []): Promise<void> {
 
     const useHttp = values['http'] === true;
     const port = Number(values['port'] ?? 3000);
+    if (!Number.isFinite(port) || port < 1 || port > 65535) {
+        throw new Error(`Invalid port: ${values['port']}. Must be 1-65535.`);
+    }
 
     const focusMcp = createFocusMcp();
     await focusMcp.start();
@@ -65,7 +68,13 @@ export async function startCommand(argv: string[] = []): Promise<void> {
     });
 
     const cleanup = async (): Promise<void> => {
-        await focusMcp.stop();
+        try {
+            await focusMcp.stop();
+        } catch (err) {
+            process.stderr.write(
+                `Shutdown error: ${err instanceof Error ? err.message : String(err)}\n`,
+            );
+        }
         process.exit(0);
     };
 
@@ -76,12 +85,25 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         const httpTransport = new StreamableHTTPServerTransport({});
         await server.connect(httpTransport as unknown as Transport);
 
+        const MAX_BODY = 1024 * 1024; // 1MB
         const httpServer = createServer(async (req, res) => {
             let body = '';
             for await (const chunk of req) {
                 body += chunk;
+                if (body.length > MAX_BODY) {
+                    res.writeHead(413, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Payload too large' }));
+                    return;
+                }
             }
-            const parsed = body.length > 0 ? JSON.parse(body) : undefined;
+            let parsed: unknown;
+            try {
+                parsed = body.length > 0 ? JSON.parse(body) : undefined;
+            } catch {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid JSON' }));
+                return;
+            }
             await httpTransport.handleRequest(req, res, parsed);
         });
 
@@ -98,5 +120,6 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         const transport = new StdioServerTransport();
         await server.connect(transport);
         process.stderr.write('FocusMCP stdio MCP server started\n');
+        await new Promise<void>(() => {});
     }
 }

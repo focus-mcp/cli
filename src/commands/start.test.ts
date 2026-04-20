@@ -115,7 +115,9 @@ describe('startCommand', () => {
 
     it('starts FocusMcp, connects transport and registers MCP handlers', async () => {
         const { startCommand } = await import('./start.ts');
-        await expect(startCommand([])).resolves.toBeUndefined();
+        // startCommand in stdio mode blocks forever — run without await
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
 
         expect(mockStart).toHaveBeenCalledOnce();
         expect(mockConnect).toHaveBeenCalledOnce();
@@ -127,14 +129,21 @@ describe('startCommand', () => {
             'CallToolRequestSchema',
             expect.any(Function),
         );
+
+        // The promise never resolves (infinite await), which is expected behaviour
+        void promise;
     });
 
     it('registers SIGINT and SIGTERM handlers', async () => {
         const { startCommand } = await import('./start.ts');
-        await startCommand([]);
+        // stdio mode blocks forever — run without await
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
 
         expect(process.once).toHaveBeenCalledWith('SIGINT', expect.any(Function));
         expect(process.once).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
+
+        void promise;
     });
 
     it('cleanup handler calls focusMcp.stop() and process.exit(0) on signal', async () => {
@@ -148,7 +157,9 @@ describe('startCommand', () => {
         });
 
         const { startCommand } = await import('./start.ts');
-        await startCommand([]);
+        // stdio mode blocks forever — run without await
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
 
         const sigintEntry = registeredHandlers.find(([ev]) => ev === 'SIGINT');
         if (!sigintEntry) throw new Error('SIGINT handler not registered');
@@ -158,6 +169,8 @@ describe('startCommand', () => {
 
         expect(mockStop).toHaveBeenCalledOnce();
         expect(exitSpy).toHaveBeenCalledWith(0);
+
+        void promise;
     });
 
     it('ListTools handler returns mapped tools from router', async () => {
@@ -170,7 +183,9 @@ describe('startCommand', () => {
         ]);
 
         const { startCommand } = await import('./start.ts');
-        await startCommand([]);
+        // stdio mode blocks forever — run without await
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
 
         // Find the ListTools handler (first setRequestHandler call)
         const listToolsCall = mockSetRequestHandler.mock.calls.find(
@@ -190,6 +205,8 @@ describe('startCommand', () => {
                 },
             ],
         });
+
+        void promise;
     });
 
     it('CallTool handler dispatches to router.callTool and formats text content', async () => {
@@ -198,7 +215,9 @@ describe('startCommand', () => {
         });
 
         const { startCommand } = await import('./start.ts');
-        await startCommand([]);
+        // stdio mode blocks forever — run without await
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
 
         const callToolCall = mockSetRequestHandler.mock.calls.find(
             (call) => call[0] === 'CallToolRequestSchema',
@@ -215,6 +234,8 @@ describe('startCommand', () => {
         expect(result).toEqual({
             content: [{ type: 'text', text: 'hello' }],
         });
+
+        void promise;
     });
 
     it('CallTool handler formats non-text content as JSON', async () => {
@@ -223,7 +244,9 @@ describe('startCommand', () => {
         });
 
         const { startCommand } = await import('./start.ts');
-        await startCommand([]);
+        // stdio mode blocks forever — run without await
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
 
         const callToolCall = mockSetRequestHandler.mock.calls.find(
             (call) => call[0] === 'CallToolRequestSchema',
@@ -238,13 +261,17 @@ describe('startCommand', () => {
         expect(result).toEqual({
             content: [{ type: 'text', text: JSON.stringify({ key: 'value' }) }],
         });
+
+        void promise;
     });
 
     it('CallTool handler returns isError: true when callTool throws an Error', async () => {
         mockCallTool.mockRejectedValue(new Error('tool failed'));
 
         const { startCommand } = await import('./start.ts');
-        await startCommand([]);
+        // stdio mode blocks forever — run without await
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
 
         const callToolCall = mockSetRequestHandler.mock.calls.find(
             (call) => call[0] === 'CallToolRequestSchema',
@@ -260,13 +287,17 @@ describe('startCommand', () => {
             content: [{ type: 'text', text: 'tool failed' }],
             isError: true,
         });
+
+        void promise;
     });
 
     it('CallTool handler returns isError: true when callTool throws a non-Error', async () => {
         mockCallTool.mockRejectedValue('string error');
 
         const { startCommand } = await import('./start.ts');
-        await startCommand([]);
+        // stdio mode blocks forever — run without await
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
 
         const callToolCall = mockSetRequestHandler.mock.calls.find(
             (call) => call[0] === 'CallToolRequestSchema',
@@ -282,6 +313,8 @@ describe('startCommand', () => {
             content: [{ type: 'text', text: 'string error' }],
             isError: true,
         });
+
+        void promise;
     });
 
     it('uses HTTP transport and creates HTTP server when --http flag is passed', async () => {
