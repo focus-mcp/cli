@@ -75,15 +75,112 @@ export async function startCommand(argv: string[] = []): Promise<void> {
     );
 
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
-        tools: focusMcp.router.listTools().map((t) => ({
-            name: t.name,
-            description: t.description,
-            inputSchema: t.inputSchema,
-        })),
+        tools: [
+            ...focusMcp.router.listTools().map((t) => ({
+                name: t.name,
+                description: t.description,
+                inputSchema: t.inputSchema,
+            })),
+            {
+                name: 'focus_list',
+                description: 'List all loaded bricks and their tools',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+            {
+                name: 'focus_load',
+                description:
+                    'Load (activate) an installed brick — its tools become available immediately',
+                inputSchema: {
+                    type: 'object',
+                    properties: { name: { type: 'string', description: 'Brick name to load' } },
+                    required: ['name'],
+                    additionalProperties: false,
+                },
+            },
+            {
+                name: 'focus_unload',
+                description:
+                    'Unload (deactivate) a running brick — its tools are removed immediately',
+                inputSchema: {
+                    type: 'object',
+                    properties: { name: { type: 'string', description: 'Brick name to unload' } },
+                    required: ['name'],
+                    additionalProperties: false,
+                },
+            },
+        ],
     }));
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: internal tool dispatch with multiple branches
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
         const { name, arguments: args } = req.params;
+
+        // Internal tools — handled before dispatching to brick router
+        if (name === 'focus_list') {
+            const bricks = focusMcp.registry.getBricks();
+            if (bricks.length === 0) {
+                return { content: [{ type: 'text' as const, text: 'No bricks loaded.' }] };
+            }
+            const lines = bricks.map((b) => {
+                const status = focusMcp.registry.getStatus(b.manifest.name);
+                const toolNames = b.manifest.tools.map((t) => t.name).join(', ') || '(no tools)';
+                return `- ${b.manifest.name} [${status}]: ${toolNames}`;
+            });
+            return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
+        }
+
+        if (name === 'focus_load') {
+            return {
+                content: [
+                    {
+                        type: 'text' as const,
+                        text: 'Load not yet implemented. Use focus start with center.json to load bricks at startup.',
+                    },
+                ],
+            };
+        }
+
+        if (name === 'focus_unload') {
+            const brickName = (args as Record<string, unknown>)?.['name'];
+            if (typeof brickName !== 'string' || brickName.trim() === '') {
+                return {
+                    content: [{ type: 'text' as const, text: 'Missing or invalid brick name.' }],
+                    isError: true,
+                };
+            }
+            const brick = focusMcp.registry.getBrick(brickName);
+            if (!brick) {
+                return {
+                    content: [{ type: 'text' as const, text: `Brick "${brickName}" not found.` }],
+                    isError: true,
+                };
+            }
+            try {
+                await brick.stop();
+                focusMcp.registry.setStatus(brickName, 'stopped');
+                focusMcp.registry.unregister(brickName);
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `Brick "${brickName}" unloaded successfully.`,
+                        },
+                    ],
+                };
+            } catch (err) {
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `Failed to unload "${brickName}": ${err instanceof Error ? err.message : String(err)}`,
+                        },
+                    ],
+                    isError: true,
+                };
+            }
+        }
+
+        // Brick tools (existing dispatch)
         try {
             const result = await focusMcp.router.callTool(name, args ?? {});
             return {
