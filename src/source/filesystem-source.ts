@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 FocusMCP contributors
 // SPDX-License-Identifier: MIT
 
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { BrickSource } from '@focusmcp/core';
 import type { CenterJson } from '../center.ts';
@@ -52,7 +52,13 @@ export class FilesystemBrickSource implements BrickSource {
 
     async loadModule(name: string): Promise<unknown> {
         const brickName = safeBrickName(name);
-        const entryPath = safeBrickPath(this.#bricksDir, brickName, 'dist', 'index.js');
-        return import(entryPath);
+        const distPath = safeBrickPath(this.#bricksDir, brickName, 'dist', 'index.js');
+        try {
+            await access(distPath);
+            return import(distPath);
+        } catch {
+            const srcPath = safeBrickPath(this.#bricksDir, brickName, 'src', 'index.ts');
+            return import(srcPath);
+        }
     }
 }

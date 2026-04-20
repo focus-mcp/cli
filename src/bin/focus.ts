@@ -56,7 +56,9 @@ async function main(argv: string[]): Promise<number> {
         return 0;
     }
 
-    const [command, ...rest] = positionals;
+    const [command] = positionals;
+    const commandIndex = argv.indexOf(command ?? '');
+    const rest = commandIndex >= 0 ? argv.slice(commandIndex + 1) : [];
 
     if (!command || command === 'help' || values['help']) {
         printHelp();
