@@ -16,6 +16,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { parseCenterJson } from '../center.ts';
 import { FilesystemBrickSource } from '../source/filesystem-source.ts';
 
+/* v8 ignore next 7 */
 const minimalLogger = {
     trace() {},
     debug() {},
