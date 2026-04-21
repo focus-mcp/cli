@@ -1,39 +1,44 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
-    ":semanticCommits",
-    ":semanticCommitTypeAll(chore)",
-    "group:monorepos",
-    "group:recommended",
-    "schedule:weekly"
-  ],
-  "labels": ["dependencies"],
-  "rangeStrategy": "bump",
-  "lockFileMaintenance": {
-    "enabled": true,
-    "schedule": ["before 5am on monday"]
-  },
-  "vulnerabilityAlerts": {
-    "labels": ["security"],
-    "schedule": ["at any time"]
-  },
-  "packageRules": [
-    {
-      "matchUpdateTypes": ["patch", "minor"],
-      "matchCurrentVersion": "!/^0/",
-      "automerge": true,
-      "automergeType": "branch"
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": [
+        "config:recommended",
+        ":semanticCommits",
+        ":semanticCommitTypeAll(chore)",
+        "group:monorepos",
+        "group:recommended",
+        "schedule:weekly"
+    ],
+    "labels": ["dependencies"],
+    "rangeStrategy": "bump",
+    "lockFileMaintenance": {
+        "enabled": true,
+        "schedule": ["before 5am on monday"]
     },
-    {
-      "matchPackageNames": ["typescript", "@biomejs/biome", "vitest", "@modelcontextprotocol/sdk"],
-      "automerge": false
+    "vulnerabilityAlerts": {
+        "labels": ["security"],
+        "schedule": ["at any time"]
     },
-    {
-      "matchDepTypes": ["devDependencies"],
-      "automerge": true
-    }
-  ],
-  "prHourlyLimit": 4,
-  "prConcurrentLimit": 10
+    "packageRules": [
+        {
+            "matchUpdateTypes": ["patch", "minor"],
+            "matchCurrentVersion": "!/^0/",
+            "automerge": true,
+            "automergeType": "branch"
+        },
+        {
+            "matchPackageNames": [
+                "typescript",
+                "@biomejs/biome",
+                "vitest",
+                "@modelcontextprotocol/sdk"
+            ],
+            "automerge": false
+        },
+        {
+            "matchDepTypes": ["devDependencies"],
+            "automerge": true
+        }
+    ],
+    "prHourlyLimit": 4,
+    "prConcurrentLimit": 10
 }
