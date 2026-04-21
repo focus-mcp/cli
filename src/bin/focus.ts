@@ -35,68 +35,72 @@ Options:
 `;
 
 function printHelp(): void {
-  process.stdout.write(`${HELP}\n`);
+    process.stdout.write(`${HELP}\n`);
 }
 
 async function main(argv: string[]): Promise<number> {
-  const { positionals, values } = parseArgs({
-    args: argv,
-    allowPositionals: true,
-    strict: false,
-    options: {
-      help: { type: 'boolean', short: 'h' },
-      version: { type: 'boolean', short: 'v' },
-    },
-  });
+    const { positionals, values } = parseArgs({
+        args: argv,
+        allowPositionals: true,
+        strict: false,
+        options: {
+            help: { type: 'boolean', short: 'h' },
+            version: { type: 'boolean', short: 'v' },
+        },
+    });
 
-  if (values['version']) {
-    process.stdout.write('@focusmcp/cli 0.0.0\n');
-    return 0;
-  }
+    if (values['version']) {
+        process.stdout.write(
+            `@focusmcp/cli ${process.env['CLI_VERSION'] ?? '0.0.0'} (core ${process.env['CORE_VERSION'] ?? '0.0.0'})\n`,
+        );
+        return 0;
+    }
 
-  const [command, ...rest] = positionals;
+    const [command] = positionals;
+    const commandIndex = argv.indexOf(command ?? '');
+    const rest = commandIndex >= 0 ? argv.slice(commandIndex + 1) : [];
 
-  if (!command || command === 'help' || values['help']) {
-    printHelp();
-    return command ? 0 : 1;
-  }
+    if (!command || command === 'help' || values['help']) {
+        printHelp();
+        return command ? 0 : 1;
+    }
 
-  switch (command) {
-    case 'list': {
-      // TODO: read ~/.focus/center.json + center.lock, parse, then call listCommand.
-      const output = listCommand({ center: { bricks: {} }, lock: {} });
-      process.stdout.write(`${output}\n`);
-      return 0;
+    switch (command) {
+        case 'list': {
+            // TODO: read ~/.focus/center.json + center.lock, parse, then call listCommand.
+            const output = listCommand({ center: { bricks: {} }, lock: {} });
+            process.stdout.write(`${output}\n`);
+            return 0;
+        }
+        case 'info': {
+            const name = rest[0];
+            if (!name) {
+                process.stderr.write('error: `focus info <name>` requires a brick name.\n');
+                return 1;
+            }
+            // TODO: read ~/.focus/center.json + center.lock before calling.
+            const output = infoCommand({ name, center: { bricks: {} }, lock: {} });
+            process.stdout.write(`${output}\n`);
+            return 0;
+        }
+        case 'start': {
+            await startCommand(rest);
+            return 0;
+        }
+        default: {
+            process.stderr.write(`error: unknown command "${command}"\n\n`);
+            printHelp();
+            return 1;
+        }
     }
-    case 'info': {
-      const name = rest[0];
-      if (!name) {
-        process.stderr.write('error: `focus info <name>` requires a brick name.\n');
-        return 1;
-      }
-      // TODO: read ~/.focus/center.json + center.lock before calling.
-      const output = infoCommand({ name, center: { bricks: {} }, lock: {} });
-      process.stdout.write(`${output}\n`);
-      return 0;
-    }
-    case 'start': {
-      await startCommand();
-      return 0;
-    }
-    default: {
-      process.stderr.write(`error: unknown command "${command}"\n\n`);
-      printHelp();
-      return 1;
-    }
-  }
 }
 
 main(process.argv.slice(2))
-  .then((code) => {
-    process.exit(code);
-  })
-  .catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`error: ${message}\n`);
-    process.exit(1);
-  });
+    .then((code) => {
+        process.exit(code);
+    })
+    .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`error: ${message}\n`);
+        process.exit(1);
+    });
