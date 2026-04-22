@@ -51,7 +51,7 @@ async function main(argv: string[]): Promise<number> {
 
     if (values['version']) {
         process.stdout.write(
-            `@focusmcp/cli ${process.env['CLI_VERSION'] ?? '0.0.0'} (core ${process.env['CORE_VERSION'] ?? '0.0.0'})\n`,
+            `@focus-mcp/cli ${process.env['CLI_VERSION'] ?? '0.0.0'} (core ${process.env['CORE_VERSION'] ?? '0.0.0'})\n`,
         );
         return 0;
     }

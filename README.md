@@ -9,7 +9,7 @@ SPDX-License-Identifier: MIT
 >
 > [focusmcp.dev](https://focusmcp.dev) · [PRD](./PRD.md) · [Core](https://github.com/focus-mcp/core) · [Marketplace](https://github.com/focus-mcp/marketplace)
 
-`@focusmcp/cli` is the fourth pillar of FocusMCP (after `core`, `client` and `marketplace`). It is the **primary, canonical entry point** of FocusMCP — the same binary is invoked by AI clients (Claude Code, Cursor, etc.) to bring FocusMCP's bricks into any MCP-compatible agent.
+`@focus-mcp/cli` is the fourth pillar of FocusMCP (after `core`, `client` and `marketplace`). It is the **primary, canonical entry point** of FocusMCP — the same binary is invoked by AI clients (Claude Code, Cursor, etc.) to bring FocusMCP's bricks into any MCP-compatible agent.
 
 ## Status
 
@@ -19,10 +19,10 @@ Active development — pre-MVP. `focus list` and `focus info` are functional; `f
 
 ```bash
 # One-shot
-npx @focusmcp/cli start
+npx @focus-mcp/cli start
 
 # Or install globally
-npm install -g @focusmcp/cli
+npm install -g @focus-mcp/cli
 focus --version
 ```
 
@@ -46,7 +46,7 @@ Add FocusMCP as an MCP server in your Claude Code config:
   "mcpServers": {
     "focusmcp": {
       "command": "npx",
-      "args": ["-y", "@focusmcp/cli", "start"]
+      "args": ["-y", "@focus-mcp/cli", "start"]
     }
   }
 }
@@ -83,11 +83,11 @@ pnpm changeset         # create a changeset before merging
 
 ## Versioning & publishing
 
-`@focusmcp/cli` is a single npm package versioned via Changesets. `develop` is the base branch; merging a "Version Packages" PR on `main` triggers `release.yml`, which publishes to npm and creates a GitHub Release (requires the `NPM_TOKEN` repo secret).
+`@focus-mcp/cli` is a single npm package versioned via Changesets. `develop` is the base branch; merging a "Version Packages" PR on `main` triggers `release.yml`, which publishes to npm and creates a GitHub Release (requires the `NPM_TOKEN` repo secret).
 
-## Dependency on `@focusmcp/core`
+## Dependency on `@focus-mcp/core`
 
-`@focusmcp/core` is referenced as a **git dependency** (`github:focus-mcp/core`) because the monorepo that hosts it does not publish to npm at MVP. Local dev can swap the dep for a workspace link (`pnpm link ../core/packages/core`) — the CLI only uses the public API of `createFocusMcp`.
+`@focus-mcp/core` is referenced as a **git dependency** (`github:focus-mcp/core`) because the monorepo that hosts it does not publish to npm at MVP. Local dev can swap the dep for a workspace link (`pnpm link ../core/packages/core`) — the CLI only uses the public API of `createFocusMcp`.
 
 ## License
 

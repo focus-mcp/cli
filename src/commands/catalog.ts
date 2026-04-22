@@ -14,7 +14,7 @@ import {
     listSources,
     parseCatalogStore,
     removeSource,
-} from '@focusmcp/core';
+} from '@focus-mcp/core';
 import type { CatalogStoreData, CatalogStoreIO } from '../adapters/catalog-store-adapter.ts';
 
 export type CatalogSubcommand = 'add' | 'remove' | 'list';

@@ -26,7 +26,7 @@ function makeInstallerIO(overrides: Partial<InstallerIO> = {}): InstallerIO {
                 echo: {
                     version: '1.0.0',
                     catalogUrl: DEFAULT_URL,
-                    npmPackage: '@focusmcp/brick-echo',
+                    npmPackage: '@focus-mcp/brick-echo',
                     installedAt: '2026-01-01T00:00:00Z',
                 },
             },
@@ -68,7 +68,7 @@ describe('removeCommand', () => {
 
         const result = await removeCommand({ brickName: 'echo', io });
 
-        expect(installer.npmUninstall).toHaveBeenCalledWith('@focusmcp/brick-echo');
+        expect(installer.npmUninstall).toHaveBeenCalledWith('@focus-mcp/brick-echo');
         expect(installer.writeCenterJson).toHaveBeenCalledOnce();
         expect(installer.writeCenterLock).toHaveBeenCalledOnce();
         expect(result).toMatch(/removed echo/i);

@@ -3,9 +3,9 @@
 
 name: Setup toolchain
 description: |
-  Clone @focusmcp/core as a sibling directory (../core), install and build it,
+  Clone @focus-mcp/core as a sibling directory (../core), install and build it,
   then set up pnpm + Node and install this repo's dependencies.
-  The CLI depends on `@focusmcp/core` via a `file:../core/packages/core` path,
+  The CLI depends on `@focus-mcp/core` via a `file:../core/packages/core` path,
   so the sibling must exist and have a built `dist/` before `pnpm install`.
 
 inputs:
@@ -17,7 +17,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Checkout @focusmcp/core (inside workspace — actions/checkout restriction)
+    - name: Checkout @focus-mcp/core (inside workspace — actions/checkout restriction)
       uses: actions/checkout@v4
       with:
         repository: focus-mcp/core
@@ -26,7 +26,7 @@ runs:
         fetch-depth: 1
 
     # actions/checkout refuses paths outside the workspace; move it to the real sibling now.
-    - name: Move @focusmcp/core to sibling location
+    - name: Move @focus-mcp/core to sibling location
       shell: bash
       run: |
         mv "$GITHUB_WORKSPACE/.core-sibling" "$GITHUB_WORKSPACE/../core"
@@ -41,15 +41,15 @@ runs:
         cache: pnpm
         registry-url: 'https://registry.npmjs.org'
 
-    - name: Install @focusmcp/core dependencies
+    - name: Install @focus-mcp/core dependencies
       shell: bash
       working-directory: ../core
       run: pnpm install --frozen-lockfile
 
-    - name: Build @focusmcp/core
+    - name: Build @focus-mcp/core
       shell: bash
       working-directory: ../core
-      run: pnpm --filter "@focusmcp/core" build
+      run: pnpm --filter "@focus-mcp/core" build
 
     - name: Install CLI dependencies
       shell: bash
