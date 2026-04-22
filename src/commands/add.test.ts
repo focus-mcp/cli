@@ -134,6 +134,7 @@ describe('addCommand', () => {
 
         const result = await addCommand({ brickName: 'echo', io });
         expect(result).toMatch(/already installed/i);
+        expect(result).toMatch(/1\.0\.0/);
     });
 
     it('calls npmInstall and writes center state on success', async () => {
@@ -157,5 +158,20 @@ describe('addCommand', () => {
         await expect(addCommand({ brickName: 'echo', io })).rejects.toThrow(
             /failed to fetch any catalog/i,
         );
+    });
+
+    it('falls back to default store when sources list is empty and installs successfully', async () => {
+        // lines 52-53: store.sources.length === 0 → createDefaultStore()
+        const installer = makeInstallerIO();
+        const io = {
+            fetch: makeFetchIO(),
+            store: makeStoreIO([]),
+            installer,
+        };
+
+        const result = await addCommand({ brickName: 'echo', io });
+
+        expect(installer.npmInstall).toHaveBeenCalledOnce();
+        expect(result).toMatch(/installed echo@1\.0\.0/i);
     });
 });

@@ -655,6 +655,27 @@ describe('startCommand', () => {
         void promise;
     });
 
+    it('logs "Failed to load bricks" when center.json read fails with non-ENOENT error (lines 87-90)', async () => {
+        const permError = Object.assign(new Error('Permission denied'), { code: 'EACCES' });
+        mockReadFile.mockRejectedValue(permError);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            'Failed to load bricks: Permission denied\n',
+        );
+
+        void promise;
+    });
+
+    it('throws when --port value is out of range (lines 58-59)', async () => {
+        const { startCommand } = await import('./start.ts');
+
+        await expect(startCommand(['--http', '--port', '99999'])).rejects.toThrow(/invalid port/i);
+    });
+
     it('loads bricks from center.json and passes them to createFocusMcp', async () => {
         const fakeBrick = { manifest: { name: 'test-brick' }, start: vi.fn(), stop: vi.fn() };
         mockLoadBricks.mockResolvedValue({ bricks: [fakeBrick], failures: [] });
@@ -992,6 +1013,38 @@ describe('startCommand', () => {
             void promise;
         });
 
+        it('focus_unload returns isError when brick.stop() throws (lines 244-253)', async () => {
+            const mockBrickStopFail = vi.fn().mockRejectedValue(new Error('stop error'));
+            const existingBrick = {
+                manifest: { name: 'echo', tools: [] },
+                start: vi.fn().mockResolvedValue(undefined),
+                stop: mockBrickStopFail,
+            };
+            mockGetBrick.mockReturnValue(existingBrick);
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({
+                params: { name: 'focus_unload', arguments: { name: 'echo' } },
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Failed to unload');
+            expect(result.content[0]?.text).toContain('stop error');
+
+            void promise;
+        });
+
         it('focus_reload returns error when brick name is missing', async () => {
             const { startCommand } = await import('./start.ts');
             const promise = startCommand([]);
@@ -1080,6 +1133,67 @@ describe('startCommand', () => {
             expect(result.content[0]?.text).toContain('reloaded');
             expect(result.content[0]?.text).toContain('echo_say');
             expect(mockCallTool).not.toHaveBeenCalled();
+
+            void promise;
+        });
+
+        it('focus_reload returns isError when reload throws (lines 289-299)', async () => {
+            const existingBrick = {
+                manifest: { name: 'echo', tools: [] },
+                start: vi.fn().mockRejectedValue(new Error('brick start failed')),
+                stop: vi.fn().mockResolvedValue(undefined),
+            };
+            mockGetBrick.mockReturnValue(existingBrick);
+            // loadSingleBrick returns a brick whose start() throws
+            const failingBrick = {
+                manifest: { name: 'echo', tools: [] },
+                start: vi.fn().mockRejectedValue(new Error('brick start failed')),
+                stop: vi.fn().mockResolvedValue(undefined),
+            };
+            mockLoadBricks.mockResolvedValue({ bricks: [failingBrick], failures: [] });
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({
+                params: { name: 'focus_reload', arguments: { name: 'echo' } },
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Failed to reload');
+            expect(result.content[0]?.text).toContain('brick start failed');
+
+            void promise;
+        });
+
+        it('CallTool handler returns JSON-stringified result when callTool returns non-content value (lines 320-322)', async () => {
+            mockCallTool.mockResolvedValue('plain string result');
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({ params: { name: 'some_tool', arguments: {} } });
+
+            expect(result.content[0]?.type).toBe('text');
+            expect(result.content[0]?.text).toBe(JSON.stringify('plain string result'));
 
             void promise;
         });

@@ -251,4 +251,20 @@ describe('NpmInstallerAdapter', () => {
             );
         });
     });
+
+    describe('runNpm error event', () => {
+        it('rejects when spawn emits an error event', async () => {
+            const child = new EventEmitter();
+            const spawnError = new Error('spawn ENOENT');
+            setTimeout(() => {
+                child.emit('error', spawnError);
+            }, 0);
+            vi.mocked(mkdir).mockResolvedValue(undefined);
+            vi.mocked(spawn).mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+
+            await expect(adapter.npmInstall('@focusmcp/brick-echo', '1.0.0')).rejects.toThrow(
+                'spawn ENOENT',
+            );
+        });
+    });
 });
