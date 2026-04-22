@@ -23,7 +23,8 @@ vi.mock('@focusmcp/core', async (importOriginal) => {
 
 // ---------- helpers ----------
 
-const DEFAULT_URL = 'https://focus-mcp.github.io/marketplace/catalog.json';
+const DEFAULT_URL =
+    'https://raw.githubusercontent.com/focus-mcp/marketplace/develop/publish/catalog.json';
 const EXTRA_URL = 'https://example.com/catalog.json';
 
 function makeStoreIO(sourcesPayload: unknown = { sources: [] }): CatalogStoreIO {
