@@ -86,7 +86,7 @@ describe('NpmInstallerAdapter', () => {
                     'official/echo': {
                         version: '1.0.0',
                         catalogUrl: 'https://example.com/catalog.json',
-                        npmPackage: '@focus-mcp/brick-echo',
+                        npmPackage: '@focusmcp/brick-echo',
                         installedAt: '2026-01-01T00:00:00Z',
                     },
                 },
@@ -134,7 +134,7 @@ describe('NpmInstallerAdapter', () => {
                     'official/echo': {
                         version: '1.0.0',
                         catalogUrl: 'https://example.com/catalog.json',
-                        npmPackage: '@focus-mcp/brick-echo',
+                        npmPackage: '@focusmcp/brick-echo',
                         installedAt: '2026-01-01T00:00:00Z',
                     },
                 },
@@ -157,12 +157,12 @@ describe('NpmInstallerAdapter', () => {
                 makeChildProcess(0) as unknown as ReturnType<typeof spawn>,
             );
 
-            await adapter.npmInstall('@focus-mcp/brick-echo', '1.0.0');
+            await adapter.npmInstall('@focusmcp/brick-echo', '1.0.0');
 
             expect(mkdir).toHaveBeenCalledWith(BRICKS_DIR, { recursive: true });
             expect(spawn).toHaveBeenCalledWith(
                 'npm',
-                ['install', '--prefix', BRICKS_DIR, '@focus-mcp/brick-echo@1.0.0'],
+                ['install', '--prefix', BRICKS_DIR, '@focusmcp/brick-echo@1.0.0'],
                 expect.objectContaining({ stdio: 'inherit', shell: false }),
             );
         });
@@ -173,7 +173,7 @@ describe('NpmInstallerAdapter', () => {
                 makeChildProcess(0) as unknown as ReturnType<typeof spawn>,
             );
 
-            await adapter.npmInstall('@focus-mcp/brick-echo', '1.0.0', {
+            await adapter.npmInstall('@focusmcp/brick-echo', '1.0.0', {
                 registry: 'https://registry.example.com',
             });
 
@@ -185,7 +185,7 @@ describe('NpmInstallerAdapter', () => {
                     BRICKS_DIR,
                     '--registry',
                     'https://registry.example.com',
-                    '@focus-mcp/brick-echo@1.0.0',
+                    '@focusmcp/brick-echo@1.0.0',
                 ],
                 expect.objectContaining({ stdio: 'inherit', shell: false }),
             );
@@ -197,7 +197,7 @@ describe('NpmInstallerAdapter', () => {
                 makeChildProcess(1) as unknown as ReturnType<typeof spawn>,
             );
 
-            await expect(adapter.npmInstall('@focus-mcp/brick-echo', '1.0.0')).rejects.toThrow(
+            await expect(adapter.npmInstall('@focusmcp/brick-echo', '1.0.0')).rejects.toThrow(
                 'npm install exited with code 1',
             );
         });
@@ -209,11 +209,11 @@ describe('NpmInstallerAdapter', () => {
                 makeChildProcess(0) as unknown as ReturnType<typeof spawn>,
             );
 
-            await adapter.npmUninstall('@focus-mcp/brick-echo');
+            await adapter.npmUninstall('@focusmcp/brick-echo');
 
             expect(spawn).toHaveBeenCalledWith(
                 'npm',
-                ['uninstall', '--prefix', BRICKS_DIR, '@focus-mcp/brick-echo'],
+                ['uninstall', '--prefix', BRICKS_DIR, '@focusmcp/brick-echo'],
                 expect.objectContaining({ stdio: 'inherit', shell: false }),
             );
         });
@@ -223,7 +223,7 @@ describe('NpmInstallerAdapter', () => {
                 makeChildProcess(0) as unknown as ReturnType<typeof spawn>,
             );
 
-            await adapter.npmUninstall('@focus-mcp/brick-echo', {
+            await adapter.npmUninstall('@focusmcp/brick-echo', {
                 registry: 'https://registry.example.com',
             });
 
@@ -235,7 +235,7 @@ describe('NpmInstallerAdapter', () => {
                     BRICKS_DIR,
                     '--registry',
                     'https://registry.example.com',
-                    '@focus-mcp/brick-echo',
+                    '@focusmcp/brick-echo',
                 ],
                 expect.objectContaining({ stdio: 'inherit', shell: false }),
             );
@@ -246,7 +246,7 @@ describe('NpmInstallerAdapter', () => {
                 makeChildProcess(2) as unknown as ReturnType<typeof spawn>,
             );
 
-            await expect(adapter.npmUninstall('@focus-mcp/brick-echo')).rejects.toThrow(
+            await expect(adapter.npmUninstall('@focusmcp/brick-echo')).rejects.toThrow(
                 'npm uninstall exited with code 2',
             );
         });
@@ -262,7 +262,7 @@ describe('NpmInstallerAdapter', () => {
             vi.mocked(mkdir).mockResolvedValue(undefined);
             vi.mocked(spawn).mockReturnValue(child as unknown as ReturnType<typeof spawn>);
 
-            await expect(adapter.npmInstall('@focus-mcp/brick-echo', '1.0.0')).rejects.toThrow(
+            await expect(adapter.npmInstall('@focusmcp/brick-echo', '1.0.0')).rejects.toThrow(
                 'spawn ENOENT',
             );
         });

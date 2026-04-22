@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 FocusMCP contributors
 SPDX-License-Identifier: MIT
 -->
 
-# CLAUDE.md — @focus-mcp/cli
+# CLAUDE.md — @focusmcp/cli
 
 > Auto-loaded by Claude Code (and any agents.md-compatible tool) when working in this repo.
 > This file is the **source of truth for AI agent behaviour** on this project. It replaces the
@@ -14,8 +14,8 @@ SPDX-License-Identifier: MIT
 **FocusMCP** — orchestrateur MCP. Reduces AI-agent context from 200k to ~2k tokens by composing
 **briques** (atomic MCP modules). Site [focusmcp.dev](https://focusmcp.dev).
 
-Ce repo est **le point d'entrée primaire** : `@focus-mcp/cli`, une CLI Node publiée sur npm,
-qui embarque `@focus-mcp/core` et parle **stdio MCP** (via `@modelcontextprotocol/sdk`) aux
+Ce repo est **le point d'entrée primaire** : `@focusmcp/cli`, une CLI Node publiée sur npm,
+qui embarque `@focusmcp/core` et parle **stdio MCP** (via `@modelcontextprotocol/sdk`) aux
 clients AI (Claude Code, Cursor, Codex, Gemini CLI…).
 
 ## Écosystème (3 repos actifs + 1 archivé)
@@ -23,7 +23,7 @@ clients AI (Claude Code, Cursor, Codex, Gemini CLI…).
 | Repo | Rôle |
 |---|---|
 | `focus-mcp/core` | Monorepo lib TS — 3 piliers (Registry/EventBus/Router) + SDK/Validator/Marketplace resolver. Importé par ce repo via `file:../core/packages/core`. |
-| `focus-mcp/cli` (ici) | `@focus-mcp/cli` — stdio MCP, brick manager (`focus list/info/add/remove/...`). Publié npm. |
+| `focus-mcp/cli` (ici) | `@focusmcp/cli` — stdio MCP, brick manager (`focus list/info/add/remove/...`). Publié npm. |
 | `focus-mcp/marketplace` | Catalogue officiel + `bricks/*` + `modules/*` (dont `manager` = dashboard optionnel). |
 | `focus-mcp/client` | **archivé** — ex desktop Tauri, gelé post-pivot CLI-first. |
 
@@ -33,13 +33,13 @@ clients AI (Claude Code, Cursor, Codex, Gemini CLI…).
 AI client (Claude Code, Cursor, Codex, Gemini…)
        │ stdio (JSON-RPC MCP)
        ▼
-@focus-mcp/cli (ce repo)
+@focusmcp/cli (ce repo)
   ├─ @modelcontextprotocol/sdk StdioServerTransport
-  ├─ @focus-mcp/core (Registry + EventBus + Router + bricks loader)
+  ├─ @focusmcp/core (Registry + EventBus + Router + bricks loader)
   └─ (opt-in P1) admin API HTTP côté latéral (consommé par marketplace/modules/manager)
 ```
 
-**Distribution** : `npm install -g @focus-mcp/cli` ou `npx @focus-mcp/cli start`.
+**Distribution** : `npm install -g @focusmcp/cli` ou `npx @focusmcp/cli start`.
 **Claude Code plugin** natif via `.claude-plugin/plugin.json` :
 
 ```json
@@ -47,7 +47,7 @@ AI client (Claude Code, Cursor, Codex, Gemini…)
     "mcpServers": {
         "focus": {
             "command": "npx",
-            "args": ["@focus-mcp/cli", "start"]
+            "args": ["@focusmcp/cli", "start"]
         }
     }
 }
@@ -67,8 +67,8 @@ AI client (Claude Code, Cursor, Codex, Gemini…)
    `PRD.md` et `CLAUDE.md` (ce fichier) restent en français (docs internes).
 6. **Git-flow strict** — `develop` est **permanente**, jamais `--delete-branch` sur PR
    `develop→main`.
-7. **npm orgs** — `focusmcp` + `focus-mcp` réservées (squatting). `@focus-mcp/cli` est LE package
-   publié au MVP (primary distribution). Scope canonique : `@focus-mcp/*`.
+7. **npm orgs** — `focusmcp` + `focus-mcp` réservées (squatting). `@focusmcp/cli` est LE package
+   publié au MVP (primary distribution). Scope canonique : `@focusmcp/*`.
 8. **Rulesets GitHub** (identiques sur les 3 repos actifs) :
    - `main protection` cible **UNIQUEMENT `refs/heads/main`** (status checks, PR, CodeQL,
      Code Quality, linear history, pas de `required_signatures`).
@@ -80,16 +80,16 @@ AI client (Claude Code, Cursor, Codex, Gemini…)
 ## Dans ce repo (cli)
 
 **Stack** : Node ≥ 22, pnpm ≥ 10, TS 5.7+ strict, ESM, Vitest, Biome 2.x, tsup, Changesets,
-`@modelcontextprotocol/sdk` (stdio transport), `@focus-mcp/core` en file: dep.
+`@modelcontextprotocol/sdk` (stdio transport), `@focusmcp/core` en file: dep.
 
-**Dépendance critique** : `@focus-mcp/core` est consommé via `file:../core/packages/core`. Cela
+**Dépendance critique** : `@focusmcp/core` est consommé via `file:../core/packages/core`. Cela
 implique :
 - **Dev local** : le user doit avoir `focus-mcp/core` cloné comme repo sibling de ce repo
   (layout attendu : `../core`, avec le package à `../core/packages/core`). Indépendant de l'OS.
 - **CI** : action composite `.github/actions/setup` qui clone `focus-mcp/core` comme sibling,
   le build (pnpm filter), puis install ce repo.
-- **Publish npm** : `tsup --noExternal '@focus-mcp/core'` bundle le core dans le dist de la CLI,
-  donc les users finaux installent uniquement `@focus-mcp/cli`.
+- **Publish npm** : `tsup --noExternal '@focusmcp/core'` bundle le core dans le dist de la CLI,
+  donc les users finaux installent uniquement `@focusmcp/cli`.
 
 **Commandes** :
 ```bash
@@ -137,7 +137,7 @@ focus add <name>
 
 - Aucun secret commité (gitleaks en CI)
 - Le sandbox OS vient du parent process (Claude Code spawn en stdio via Seatbelt/bubblewrap)
-- EventBus guards (couche 1 sécurité) intactes, fournies par `@focus-mcp/core`
+- EventBus guards (couche 1 sécurité) intactes, fournies par `@focusmcp/core`
 - Pour run des briques non-reviewed : ajouter `isolated-vm` Phase 2 (pas au MVP)
 
 ## Documentation à lire en priorité

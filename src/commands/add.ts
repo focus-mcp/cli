@@ -20,7 +20,7 @@ import {
     parseCenterJson,
     parseCenterLock,
     planInstall,
-} from '@focus-mcp/core';
+} from '@focusmcp/core';
 import type { CatalogStoreIO } from '../adapters/catalog-store-adapter.ts';
 import type { FetchIO } from '../adapters/http-fetch-adapter.ts';
 import type { InstallerIO } from '../adapters/npm-installer-adapter.ts';

@@ -8,8 +8,8 @@ import { catalogCommand } from './catalog.ts';
 // listSources override — used only for the "empty sources" branch test (lines 100-101)
 let overrideListSources: (() => readonly unknown[]) | null = null;
 
-vi.mock('@focus-mcp/core', async (importOriginal) => {
-    const original = await importOriginal<typeof import('@focus-mcp/core')>();
+vi.mock('@focusmcp/core', async (importOriginal) => {
+    const original = await importOriginal<typeof import('@focusmcp/core')>();
     return {
         ...original,
         listSources: (...args: Parameters<typeof original.listSources>) => {

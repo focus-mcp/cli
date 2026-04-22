@@ -13,7 +13,7 @@
  *
  * Both files live under `~/.focus/` and are read by every CLI command.
  * These parsers perform structural validation only — semver validity,
- * catalog URLs, and signatures are checked by `@focus-mcp/core`.
+ * catalog URLs, and signatures are checked by `@focusmcp/core`.
  */
 
 export interface CenterJsonEntry {

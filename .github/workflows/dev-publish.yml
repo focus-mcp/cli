@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   publish-dev:
-    name: Publish @focus-mcp/cli@dev
+    name: Publish @focusmcp/cli@dev
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-          scope: '@focus-mcp'
+          scope: '@focusmcp'
       - name: Compute dev version
         id: version
         run: |

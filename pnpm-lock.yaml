@@ -27,7 +27,7 @@ importers:
       '@commitlint/types':
         specifier: ^19.8.1
         version: 19.8.1
-      '@focus-mcp/core':
+      '@focusmcp/core':
         specifier: file:../core/packages/core
         version: file:../core/packages/core
       '@types/node':
@@ -424,7 +424,7 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@focus-mcp/core@file:../core/packages/core':
+  '@focusmcp/core@file:../core/packages/core':
     resolution: {directory: ../core/packages/core, type: directory}
 
   '@hono/node-server@1.19.14':
@@ -2534,7 +2534,7 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
-  '@focus-mcp/core@file:../core/packages/core':
+  '@focusmcp/core@file:../core/packages/core':
     dependencies:
       '@opentelemetry/api': 1.9.1
 

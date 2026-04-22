@@ -7,10 +7,10 @@ import type { FetchIO } from '../adapters/http-fetch-adapter.ts';
 import type { InstallerIO } from '../adapters/npm-installer-adapter.ts';
 
 // Re-export real implementations by default; individual tests can override parseCenterJson
-const realCore = await vi.importActual<typeof import('@focus-mcp/core')>('@focus-mcp/core');
+const realCore = await vi.importActual<typeof import('@focusmcp/core')>('@focusmcp/core');
 
-vi.mock('@focus-mcp/core', async (importOriginal) => {
-    const real = await importOriginal<typeof import('@focus-mcp/core')>();
+vi.mock('@focusmcp/core', async (importOriginal) => {
+    const real = await importOriginal<typeof import('@focusmcp/core')>();
     return { ...real };
 });
 
@@ -79,7 +79,7 @@ function validBrick(overrides: Partial<Record<string, unknown>> = {}): Record<st
         description: 'Echo brick',
         dependencies: [],
         tools: [{ name: 'say', description: 'Echo text' }],
-        source: { type: 'npm', package: '@focus-mcp/brick-echo' },
+        source: { type: 'npm', package: '@focusmcp/brick-echo' },
         ...overrides,
     };
 }
@@ -134,7 +134,7 @@ describe('addCommand', () => {
                         echo: {
                             version: '1.0.0',
                             catalogUrl: DEFAULT_URL,
-                            npmPackage: '@focus-mcp/brick-echo',
+                            npmPackage: '@focusmcp/brick-echo',
                             installedAt: '2026-01-01T00:00:00Z',
                         },
                     },
@@ -188,7 +188,7 @@ describe('addCommand', () => {
     it('shows "unknown" version when installed brick entry has no version (line 84 fallback)', async () => {
         // Override parseCenterJson to return a brick entry without a version field
         // so that centerJson.bricks[brickName]?.version is undefined, hitting the ?? 'unknown' branch
-        const { default: core } = await import('@focus-mcp/core').then((m) => ({ default: m }));
+        const { default: core } = await import('@focusmcp/core').then((m) => ({ default: m }));
         vi.spyOn(core, 'parseCenterJson').mockReturnValue({
             bricks: {
                 echo: { enabled: true } as unknown as ReturnType<

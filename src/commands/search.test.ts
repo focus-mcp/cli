@@ -42,7 +42,7 @@ function validBrick(overrides: Partial<Record<string, unknown>> = {}): Record<st
         tags: ['utility'],
         dependencies: [],
         tools: [{ name: 'say', description: 'Echo text' }],
-        source: { type: 'npm', package: '@focus-mcp/brick-echo' },
+        source: { type: 'npm', package: '@focusmcp/brick-echo' },
         ...overrides,
     };
 }

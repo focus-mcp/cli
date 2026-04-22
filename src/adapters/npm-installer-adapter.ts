@@ -5,7 +5,7 @@
  * Node.js implementation of InstallerIO using child_process and the
  * ~/.focus/ filesystem layout.
  *
- * Conforms to the InstallerIO interface expected by @focus-mcp/core
+ * Conforms to the InstallerIO interface expected by @focusmcp/core
  * marketplace/installer pure functions.
  */
 
