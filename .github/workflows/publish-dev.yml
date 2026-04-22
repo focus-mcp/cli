@@ -1,7 +1,10 @@
 # SPDX-FileCopyrightText: 2026 FocusMCP contributors
 # SPDX-License-Identifier: MIT
+#
+# Publish dev — on push to develop:
+#   Builds and publishes pre-release packages to npm with a `dev` dist-tag.
 
-name: Publish to GitHub Packages (dev)
+name: Publish dev to npm
 
 on:
   push:
@@ -10,22 +13,28 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  id-token: write
+
+concurrency: publish-dev-${{ github.ref }}
 
 jobs:
-  publish:
-    name: Publish @focusmcp/cli to GitHub Packages
+  publish-dev:
+    name: Publish dev to npm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-          registry-url: https://npm.pkg.github.com
-          scope: '@focusmcp'
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: npm publish --access public 2>&1 || echo "→ skipped (already published or error)"
+      - name: Publish pre-release to npm
+        run: pnpm release --tag dev --no-git-checks
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
