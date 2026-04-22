@@ -18,20 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: ./.github/actions/setup
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
           registry-url: https://npm.pkg.github.com
           scope: '@focusmcp'
-      - uses: actions/checkout@v5
-        with:
-          repository: focus-mcp/core
-          ref: develop
-          path: ../core
-      - run: cd ../core && pnpm install --frozen-lockfile && pnpm build
-      - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: npm publish --access public 2>&1 || echo "→ skipped (already published or error)"
         env:
