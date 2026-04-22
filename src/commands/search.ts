@@ -11,14 +11,12 @@
 
 import {
     aggregateCatalogs,
-    fetchAllCatalogs,
-    searchBricks,
-} from '../../../core/packages/core/src/marketplace/catalog-fetcher.ts';
-import {
     createDefaultStore,
+    fetchAllCatalogs,
     getEnabledSources,
     parseCatalogStore,
-} from '../../../core/packages/core/src/marketplace/catalog-store.ts';
+    searchBricks,
+} from '@focusmcp/core';
 import type { CatalogStoreIO } from '../adapters/catalog-store-adapter.ts';
 import type { FetchIO } from '../adapters/http-fetch-adapter.ts';
 

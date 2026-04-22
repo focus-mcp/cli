@@ -11,20 +11,16 @@
 
 import {
     aggregateCatalogs,
+    createDefaultStore,
+    executeInstall,
     fetchAllCatalogs,
     findBrickAcrossCatalogs,
-} from '../../../core/packages/core/src/marketplace/catalog-fetcher.ts';
-import {
-    createDefaultStore,
     getEnabledSources,
     parseCatalogStore,
-} from '../../../core/packages/core/src/marketplace/catalog-store.ts';
-import {
-    executeInstall,
     parseCenterJson,
     parseCenterLock,
     planInstall,
-} from '../../../core/packages/core/src/marketplace/installer.ts';
+} from '@focusmcp/core';
 import type { CatalogStoreIO } from '../adapters/catalog-store-adapter.ts';
 import type { FetchIO } from '../adapters/http-fetch-adapter.ts';
 import type { InstallerIO } from '../adapters/npm-installer-adapter.ts';

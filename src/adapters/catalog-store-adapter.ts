@@ -12,10 +12,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type {
-    CatalogStoreData,
-    CatalogStoreIO,
-} from '../../../core/packages/core/src/marketplace/catalog-store.ts';
+import type { CatalogStoreData, CatalogStoreIO } from '@focusmcp/core';
 
 export type { CatalogStoreData, CatalogStoreIO };
 

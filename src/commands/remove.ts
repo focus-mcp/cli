@@ -9,12 +9,7 @@
  * Pure function: all I/O is injected via RemoveIO.
  */
 
-import {
-    executeRemove,
-    parseCenterJson,
-    parseCenterLock,
-    planRemove,
-} from '../../../core/packages/core/src/marketplace/installer.ts';
+import { executeRemove, parseCenterJson, parseCenterLock, planRemove } from '@focusmcp/core';
 import type { InstallerIO } from '../adapters/npm-installer-adapter.ts';
 
 export interface RemoveIO {
