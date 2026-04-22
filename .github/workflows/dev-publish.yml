@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   publish-dev:
-    name: Publish @focusmcp/cli@dev
+    name: Publish @focus-mcp/cli@dev
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -28,8 +28,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          registry-url: https://npm.pkg.github.com
-          scope: '@focusmcp'
+          registry-url: https://registry.npmjs.org
+          scope: '@focus-mcp'
       - name: Compute dev version
         id: version
         run: |
@@ -47,4 +47,4 @@ jobs:
       - name: Publish with dev tag
         run: npm publish --tag dev --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

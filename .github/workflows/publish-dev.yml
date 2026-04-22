@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   publish:
-    name: Publish @focusmcp/cli to GitHub Packages
+    name: Publish @focus-mcp/cli to npmjs.org
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -24,9 +24,9 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          registry-url: https://npm.pkg.github.com
-          scope: '@focusmcp'
+          registry-url: https://registry.npmjs.org
+          scope: '@focus-mcp'
       - run: pnpm build
       - run: npm publish --access public 2>&1 || echo "→ skipped (already published or error)"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
