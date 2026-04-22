@@ -6,8 +6,8 @@ import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import type { Brick } from '@focus-mcp/core';
-import { createFocusMcp, loadBricks } from '@focus-mcp/core';
+import type { Brick } from '@focusmcp/core';
+import { createFocusMcp, loadBricks } from '@focusmcp/core';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -100,7 +100,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
     await focusMcp.start();
 
     const server = new Server(
-        { name: '@focus-mcp/cli', version: '0.0.0' },
+        { name: '@focusmcp/cli', version: '0.0.0' },
         { capabilities: { tools: {} } },
     );
 

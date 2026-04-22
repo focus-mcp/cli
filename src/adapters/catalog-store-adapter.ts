@@ -5,14 +5,14 @@
  * Filesystem implementation of CatalogStoreIO.
  *
  * Reads and writes the catalog source registry at ~/.focus/catalogs.json.
- * Conforms to the CatalogStoreIO interface expected by @focus-mcp/core
+ * Conforms to the CatalogStoreIO interface expected by @focusmcp/core
  * marketplace/catalog-store pure functions.
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { CatalogStoreData, CatalogStoreIO } from '@focus-mcp/core';
+import type { CatalogStoreData, CatalogStoreIO } from '@focusmcp/core';
 
 export type { CatalogStoreData, CatalogStoreIO };
 

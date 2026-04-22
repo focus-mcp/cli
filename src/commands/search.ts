@@ -16,7 +16,7 @@ import {
     getEnabledSources,
     parseCatalogStore,
     searchBricks,
-} from '@focus-mcp/core';
+} from '@focusmcp/core';
 import type { CatalogStoreIO } from '../adapters/catalog-store-adapter.ts';
 import type { FetchIO } from '../adapters/http-fetch-adapter.ts';
 

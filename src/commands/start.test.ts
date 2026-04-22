@@ -74,7 +74,7 @@ const {
     };
 });
 
-vi.mock('@focus-mcp/core', () => ({
+vi.mock('@focusmcp/core', () => ({
     createFocusMcp: () => ({
         start: mockStart,
         stop: mockStop,
