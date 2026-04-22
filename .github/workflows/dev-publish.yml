@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: 2026 FocusMCP contributors
+# SPDX-License-Identifier: MIT
+
+name: Dev Publish
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-dev:
+    name: Publish @focus-mcp/cli@dev
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          scope: '@focus-mcp'
+      - name: Compute dev version
+        id: version
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          DEV_NUM=$(git rev-list --count ${LAST_TAG}..HEAD)
+          BASE_VERSION=$(node -e "const p=require('./package.json'); console.log(p.version || '0.1.0')")
+          DEV_VERSION="${BASE_VERSION}-dev.${DEV_NUM}"
+          echo "version=${DEV_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Dev version: ${DEV_VERSION}"
+      - name: Set dev version
+        run: npm version "${DEV_VERSION}" --no-git-tag-version
+        env:
+          DEV_VERSION: ${{ steps.version.outputs.version }}
+      - run: pnpm build
+      - name: Publish with dev tag
+        run: npm publish --tag dev --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
