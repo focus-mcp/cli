@@ -655,6 +655,42 @@ describe('startCommand', () => {
         void promise;
     });
 
+    it('logs "Failed to load bricks" using String(err) when center.json read throws a non-Error (line 88)', async () => {
+        // Throw a non-Error so the `String(err)` branch is hit
+        mockReadFile.mockRejectedValue('raw string rejection');
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            'Failed to load bricks: raw string rejection\n',
+        );
+
+        void promise;
+    });
+
+    it('logs "Failed to load bricks" when center.json read fails with non-ENOENT error (lines 87-90)', async () => {
+        const permError = Object.assign(new Error('Permission denied'), { code: 'EACCES' });
+        mockReadFile.mockRejectedValue(permError);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            'Failed to load bricks: Permission denied\n',
+        );
+
+        void promise;
+    });
+
+    it('throws when --port value is out of range (lines 58-59)', async () => {
+        const { startCommand } = await import('./start.ts');
+
+        await expect(startCommand(['--http', '--port', '99999'])).rejects.toThrow(/invalid port/i);
+    });
+
     it('loads bricks from center.json and passes them to createFocusMcp', async () => {
         const fakeBrick = { manifest: { name: 'test-brick' }, start: vi.fn(), stop: vi.fn() };
         mockLoadBricks.mockResolvedValue({ bricks: [fakeBrick], failures: [] });
@@ -992,6 +1028,38 @@ describe('startCommand', () => {
             void promise;
         });
 
+        it('focus_unload returns isError when brick.stop() throws (lines 244-253)', async () => {
+            const mockBrickStopFail = vi.fn().mockRejectedValue(new Error('stop error'));
+            const existingBrick = {
+                manifest: { name: 'echo', tools: [] },
+                start: vi.fn().mockResolvedValue(undefined),
+                stop: mockBrickStopFail,
+            };
+            mockGetBrick.mockReturnValue(existingBrick);
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({
+                params: { name: 'focus_unload', arguments: { name: 'echo' } },
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Failed to unload');
+            expect(result.content[0]?.text).toContain('stop error');
+
+            void promise;
+        });
+
         it('focus_reload returns error when brick name is missing', async () => {
             const { startCommand } = await import('./start.ts');
             const promise = startCommand([]);
@@ -1083,5 +1151,276 @@ describe('startCommand', () => {
 
             void promise;
         });
+
+        it('focus_reload returns isError when reload throws (lines 289-299)', async () => {
+            const existingBrick = {
+                manifest: { name: 'echo', tools: [] },
+                start: vi.fn().mockRejectedValue(new Error('brick start failed')),
+                stop: vi.fn().mockResolvedValue(undefined),
+            };
+            mockGetBrick.mockReturnValue(existingBrick);
+            // loadSingleBrick returns a brick whose start() throws
+            const failingBrick = {
+                manifest: { name: 'echo', tools: [] },
+                start: vi.fn().mockRejectedValue(new Error('brick start failed')),
+                stop: vi.fn().mockResolvedValue(undefined),
+            };
+            mockLoadBricks.mockResolvedValue({ bricks: [failingBrick], failures: [] });
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({
+                params: { name: 'focus_reload', arguments: { name: 'echo' } },
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Failed to reload');
+            expect(result.content[0]?.text).toContain('brick start failed');
+
+            void promise;
+        });
+
+        it('CallTool handler returns JSON-stringified result when callTool returns non-content value (lines 320-322)', async () => {
+            mockCallTool.mockResolvedValue('plain string result');
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({ params: { name: 'some_tool', arguments: {} } });
+
+            expect(result.content[0]?.type).toBe('text');
+            expect(result.content[0]?.text).toBe(JSON.stringify('plain string result'));
+
+            void promise;
+        });
+
+        it('focus_list shows "(no tools)" when a brick has no tools (line 161)', async () => {
+            mockGetBricks.mockReturnValue([
+                {
+                    manifest: { name: 'toolless-brick', tools: [] },
+                    start: vi.fn(),
+                    stop: vi.fn(),
+                },
+            ]);
+            mockGetStatus.mockReturnValue('running');
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }> }>;
+
+            const result = await handler({ params: { name: 'focus_list', arguments: {} } });
+
+            expect(result.content[0]?.text).toContain('(no tools)');
+
+            void promise;
+        });
+
+        it('focus_unload error path uses String(err) when stop() throws a non-Error (line 248)', async () => {
+            const mockBrickStopNonError = vi.fn().mockRejectedValue('non-error string');
+            const existingBrick = {
+                manifest: { name: 'echo', tools: [] },
+                start: vi.fn().mockResolvedValue(undefined),
+                stop: mockBrickStopNonError,
+            };
+            mockGetBrick.mockReturnValue(existingBrick);
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({
+                params: { name: 'focus_unload', arguments: { name: 'echo' } },
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('non-error string');
+
+            void promise;
+        });
+
+        it('focus_reload error path uses String(err) when a non-Error is thrown (line 294)', async () => {
+            const mockBrickStop = vi.fn().mockResolvedValue(undefined);
+            const existingBrick = {
+                manifest: { name: 'echo', tools: [] },
+                start: vi.fn().mockResolvedValue(undefined),
+                stop: mockBrickStop,
+            };
+            mockGetBrick.mockReturnValue(existingBrick);
+            // loadSingleBrick throws a non-Error
+            mockLoadBricks.mockRejectedValue('non-error reload string');
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({
+                params: { name: 'focus_reload', arguments: { name: 'echo' } },
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('non-error reload string');
+
+            void promise;
+        });
+
+        it('CallTool handler uses empty object when args is undefined (line 304 ?? {})', async () => {
+            mockCallTool.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: undefined };
+            }) => Promise<{ content: unknown[] }>;
+
+            // Call without arguments (undefined) to trigger the `args ?? {}` fallback
+            const result = await handler({ params: { name: 'echo_say' } });
+
+            expect(mockCallTool).toHaveBeenCalledWith('echo_say', {});
+            expect(result.content[0]).toEqual({ type: 'text', text: 'ok' });
+
+            void promise;
+        });
+
+        it('focus_load error path uses String(err) when a non-Error is thrown (line 207)', async () => {
+            mockGetBrick.mockReturnValue(undefined);
+            // Make loadBricks throw a non-Error so the `String(err)` branch is hit
+            mockLoadBricks.mockRejectedValue('non-error string thrown');
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+            const result = await handler({
+                params: { name: 'focus_load', arguments: { name: 'echo' } },
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('non-error string thrown');
+
+            void promise;
+        });
+
+        it('CallTool handler content mapping uses empty string fallback when text is undefined (line 315)', async () => {
+            // Return a text item with no text property to hit the `?? ''` branch
+            mockCallTool.mockResolvedValue({
+                content: [{ type: 'text' }],
+            });
+
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const callToolCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'CallToolRequestSchema',
+            );
+            if (!callToolCall) throw new Error('CallTool handler not registered');
+            const handler = callToolCall[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }> }>;
+
+            const result = await handler({ params: { name: 'echo_say', arguments: {} } });
+
+            expect(result.content[0]?.type).toBe('text');
+            expect(result.content[0]?.text).toBe('');
+
+            void promise;
+        });
+    });
+
+    it('cleanup handler uses String(err) when stop() throws a non-Error (line 341)', async () => {
+        const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+        // Throw a non-Error so `String(err)` branch is hit in the cleanup handler
+        mockStop.mockRejectedValue('raw string error');
+
+        const registeredHandlers: Array<[string, () => Promise<void>]> = [];
+        // @ts-expect-error — mock overload for process.once signal handlers
+        vi.spyOn(process, 'once').mockImplementation((event: string, handler: unknown) => {
+            registeredHandlers.push([event, handler as () => Promise<void>]);
+            return process;
+        });
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const sigintEntry = registeredHandlers.find(([ev]) => ev === 'SIGINT');
+        if (!sigintEntry) throw new Error('SIGINT handler not registered');
+        const cleanup = sigintEntry[1];
+
+        await cleanup();
+
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            expect.stringContaining('Shutdown error: raw string error'),
+        );
+        expect(exitSpy).toHaveBeenCalledWith(0);
+
+        void promise;
+    });
+
+    it('minimalLogger methods are callable and do nothing', async () => {
+        const { minimalLogger } = await import('./start.ts');
+        // Each method is a no-op stub — call them to satisfy coverage
+        expect(() => minimalLogger.trace()).not.toThrow();
+        expect(() => minimalLogger.debug()).not.toThrow();
+        expect(() => minimalLogger.info()).not.toThrow();
+        expect(() => minimalLogger.warn()).not.toThrow();
+        expect(() => minimalLogger.error()).not.toThrow();
     });
 });

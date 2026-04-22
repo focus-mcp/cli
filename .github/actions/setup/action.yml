@@ -12,7 +12,7 @@ inputs:
   core-ref:
     description: Git ref (branch, tag, SHA) of focus-mcp/core to check out.
     required: false
-    default: main
+    default: develop
 
 runs:
   using: composite

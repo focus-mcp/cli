@@ -85,6 +85,8 @@ async function main(argv: string[]): Promise<number> {
         }
         case 'start': {
             await startCommand(rest);
+            // Keep the process alive until a signal terminates it
+            await new Promise<void>(() => {});
             return 0;
         }
         default: {
