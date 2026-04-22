@@ -94,18 +94,34 @@ implique :
 **Commandes** :
 ```bash
 pnpm install
-pnpm test        # 25 tests (center, commands/list, commands/info)
+pnpm test        # 142 tests, 100% coverage (center, commands/list, commands/info, commands/add, commands/remove, commands/search, commands/catalog)
 pnpm typecheck
 pnpm lint / lint:fix
 pnpm build       # tsup → dist/bin/focus.js + dist/index.js
 pnpm changeset   # avant toute PR qui change l'API publique
 ```
 
-**Commandes CLI publiques** (MVP) :
+**Commandes CLI publiques** (implémentées) :
 - `focus list` — liste les briques installées (lit `~/.focus/center.json` + `center.lock`)
 - `focus info <name>` — détails d'une brique
-- `focus start` — stub pour le moment, lance stdio MCP via `@modelcontextprotocol/sdk` (prochain PR)
-- `focus add/remove/update/search` — P1
+- `focus start` — lance stdio MCP via `@modelcontextprotocol/sdk`
+- `focus add <name>` — installe une brique depuis le catalogue (npm)
+- `focus remove <name>` — désinstalle une brique
+- `focus search <query>` — recherche dans le catalogue
+- `focus catalog` — affiche/gère les sources de catalogue
+
+**Adapters (couche infra)** :
+- `catalog-store-adapter` — persistance locale du catalogue (lecture/écriture `~/.focus/`)
+- `http-fetch-adapter` — récupération HTTP du `catalog.json` distant
+- `npm-installer-adapter` — installation/désinstallation de packages npm
+
+**Architecture marketplace flow** :
+```
+focus add <name>
+  ├─ http-fetch-adapter → catalog.json (URL source)
+  ├─ catalog-store-adapter → cache local + résolution brique
+  └─ npm-installer-adapter → npm install @focusmcp/<name>
+```
 
 ## Workflow pour une feature
 
