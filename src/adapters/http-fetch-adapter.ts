@@ -4,7 +4,7 @@
 /**
  * Node.js (≥ 22) implementation of FetchIO using the global fetch API.
  *
- * Conforms to the FetchIO interface expected by @focusmcp/core
+ * Conforms to the FetchIO interface expected by @focus-mcp/core
  * marketplace/catalog-fetcher pure functions.
  */
 

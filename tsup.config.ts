@@ -17,10 +17,10 @@ export default defineConfig({
     format: ['esm'],
     target: 'node22',
     platform: 'node',
-    // @focusmcp/core is consumed locally via a file: dep at build time.
+    // @focus-mcp/core is consumed locally via a file: dep at build time.
     // We bundle it into dist so the published tarball is self-contained
-    // and end users don't have to install @focusmcp/core themselves.
-    noExternal: ['@focusmcp/core'],
+    // and end users don't have to install @focus-mcp/core themselves.
+    noExternal: ['@focus-mcp/core'],
     // Only the programmatic API emits .d.ts; the binary doesn't need types.
     dts: {
         entry: { index: 'src/index.ts' },

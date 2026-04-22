@@ -36,7 +36,7 @@ pnpm reuse               # REUSE compliance (SPDX headers)
 
 1. **Strict TDD** — tests first. Coverage ≥ 80 % global (the `vitest` config enforces this).
 2. **No `any`**, no `!` non-null assertion, no untyped `catch`.
-3. **No `console.*` outside `src/bin/` and `src/commands/`.** Use structured logging from `@focusmcp/core` everywhere else.
+3. **No `console.*` outside `src/bin/` and `src/commands/`.** Use structured logging from `@focus-mcp/core` everywhere else.
 4. **ESM only**, `node:` protocol for Node built-ins.
 5. **SPDX headers** in every source file (`SPDX-FileCopyrightText: 2026 FocusMCP contributors` + `SPDX-License-Identifier: MIT`). For JSON files, add a sibling `.license` file (REUSE convention).
 6. **Conventional Commits** — enforced by commitlint (`feat(list): ...`, `fix(info): ...`, `docs(readme): ...`). Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.

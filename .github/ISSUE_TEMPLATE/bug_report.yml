@@ -20,7 +20,7 @@ body:
     id: version
     attributes:
       label: CLI version
-      description: 'Output of `focus --version` (or the `@focusmcp/cli` version you installed).'
+      description: 'Output of `focus --version` (or the `@focus-mcp/cli` version you installed).'
       placeholder: '0.1.0'
     validations:
       required: true
