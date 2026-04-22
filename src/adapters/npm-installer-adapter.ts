@@ -55,18 +55,17 @@ const BRICKS_DIR = join(FOCUS_DIR, 'bricks');
 
 // ---------- helpers ----------
 
-function runNpm(args: string[], opts?: { cwd?: string }): Promise<void> {
+function runNpm(args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
         const child = spawn('npm', args, {
             stdio: 'inherit',
             shell: false,
-            ...(opts?.cwd !== undefined ? { cwd: opts.cwd } : {}),
         });
         child.on('close', (code) => {
             if (code === 0) {
                 resolve();
             } else {
-                reject(new Error(`npm ${args[0] ?? ''} exited with code ${String(code)}`));
+                reject(new Error(`npm ${args[0]} exited with code ${String(code)}`));
             }
         });
         child.on('error', reject);

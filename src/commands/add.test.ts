@@ -5,6 +5,15 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CatalogStoreIO } from '../adapters/catalog-store-adapter.ts';
 import type { FetchIO } from '../adapters/http-fetch-adapter.ts';
 import type { InstallerIO } from '../adapters/npm-installer-adapter.ts';
+
+// Re-export real implementations by default; individual tests can override parseCenterJson
+const realCore = await vi.importActual<typeof import('@focusmcp/core')>('@focusmcp/core');
+
+vi.mock('@focusmcp/core', async (importOriginal) => {
+    const real = await importOriginal<typeof import('@focusmcp/core')>();
+    return { ...real };
+});
+
 import { addCommand } from './add.ts';
 
 // ---------- helpers ----------
@@ -173,5 +182,33 @@ describe('addCommand', () => {
 
         expect(installer.npmInstall).toHaveBeenCalledOnce();
         expect(result).toMatch(/installed echo@1\.0\.0/i);
+    });
+
+    it('shows "unknown" version when installed brick entry has no version (line 84 fallback)', async () => {
+        // Override parseCenterJson to return a brick entry without a version field
+        // so that centerJson.bricks[brickName]?.version is undefined, hitting the ?? 'unknown' branch
+        const { default: core } = await import('@focusmcp/core').then((m) => ({ default: m }));
+        vi.spyOn(core, 'parseCenterJson').mockReturnValue({
+            bricks: {
+                echo: { enabled: true } as unknown as ReturnType<
+                    typeof realCore.parseCenterJson
+                >['bricks'][string],
+            },
+        });
+
+        const io = {
+            fetch: makeFetchIO(),
+            store: makeStoreIO(),
+            installer: makeInstallerIO({
+                readCenterJson: vi.fn().mockResolvedValue({ bricks: { echo: {} } }),
+                readCenterLock: vi.fn().mockResolvedValue({ bricks: {} }),
+            }),
+        };
+
+        const result = await addCommand({ brickName: 'echo', io });
+        expect(result).toMatch(/already installed/i);
+        expect(result).toMatch(/unknown/);
+
+        vi.restoreAllMocks();
     });
 });

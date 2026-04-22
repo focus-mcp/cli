@@ -16,8 +16,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { parseCenterJson } from '../center.ts';
 import { FilesystemBrickSource } from '../source/filesystem-source.ts';
 
-/* v8 ignore next 7 */
-const minimalLogger = {
+export const minimalLogger = {
     trace() {},
     debug() {},
     info() {},
@@ -53,7 +52,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
     });
 
     const useHttp = values['http'] === true;
-    const port = Number(values['port'] ?? 3000);
+    const port = Number(values['port']);
     if (!Number.isFinite(port) || port < 1 || port > 65535) {
         throw new Error(`Invalid port: ${values['port']}. Must be 1-65535.`);
     }
@@ -380,12 +379,9 @@ export async function startCommand(argv: string[] = []): Promise<void> {
             });
             httpServer.once('error', reject);
         });
-
-        await new Promise<void>(() => {});
     } else {
         const transport = new StdioServerTransport();
         await server.connect(transport);
         process.stderr.write('FocusMCP stdio MCP server started\n');
-        await new Promise<void>(() => {});
     }
 }

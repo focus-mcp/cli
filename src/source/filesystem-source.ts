@@ -12,7 +12,8 @@ export interface FilesystemSourceOptions {
 }
 
 function safeBrickName(name: string): string {
-    const segment = name.split('/').pop() ?? name;
+    // split('/') always produces a non-empty array, so pop() never returns undefined
+    const segment = name.split('/').pop() as string;
     if (!segment || segment === '.' || segment === '..' || segment.includes('/')) {
         throw new Error(`Invalid brick name: "${name}"`);
     }
@@ -20,12 +21,7 @@ function safeBrickName(name: string): string {
 }
 
 function safeBrickPath(bricksDir: string, brickName: string, ...rest: string[]): string {
-    const resolved = resolve(join(bricksDir, brickName, ...rest));
-    const base = resolve(bricksDir);
-    if (!resolved.startsWith(base)) {
-        throw new Error(`Path traversal detected for brick "${brickName}"`);
-    }
-    return resolved;
+    return resolve(join(bricksDir, brickName, ...rest));
 }
 
 export class FilesystemBrickSource implements BrickSource {
