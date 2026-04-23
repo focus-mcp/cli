@@ -31,7 +31,7 @@ Examples of unacceptable behavior include:
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project team. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project team at **conduct@focusmcp.dev** or via [GitHub Security Advisories](https://github.com/focus-mcp/cli/security/advisories/new). All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 
