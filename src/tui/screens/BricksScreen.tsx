@@ -7,7 +7,8 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import { List } from '../components/List.tsx';
 import { SearchBar } from '../components/SearchBar.tsx';
 import { useBricks } from '../hooks/useBricks.tsx';
@@ -38,8 +39,8 @@ export function BricksScreen({
         if (key.escape) onBack();
     });
 
-    if (loading) return React.createElement(Text, null, 'Loading bricks...');
-    if (error !== null) return React.createElement(Text, { color: 'red' }, `Error: ${error}`);
+    if (loading) return <Text>Loading bricks...</Text>;
+    if (error !== null) return <Text color="red">{`Error: ${error}`}</Text>;
 
     const filtered =
         query.trim().length === 0
@@ -60,46 +61,41 @@ export function BricksScreen({
         };
     });
 
-    return React.createElement(
-        Box,
-        { flexDirection: 'column' },
-        React.createElement(
-            Box,
-            { marginBottom: 1 },
-            React.createElement(
-                Text,
-                { bold: true, color: 'cyan' },
-                catalogUrl !== undefined ? `Bricks — ${catalogUrl}` : 'Bricks — Aggregate View',
-            ),
-        ),
-        searching &&
-            React.createElement(SearchBar, {
-                query,
-                onChange: setQuery,
-                onSubmit: () => setSearching(false),
-                onCancel: () => {
-                    setSearching(false);
-                    setQuery('');
-                },
-            }),
-        React.createElement(List, {
-            items,
-            onSelect: (value: string) => {
-                const sepIdx = value.indexOf('::');
-                if (sepIdx === -1) return;
-                const name = value.slice(0, sepIdx);
-                const url = value.slice(sepIdx + 2);
-                if (name.length > 0 && url.length > 0) onOpen(name, url);
-            },
-        }),
-        React.createElement(
-            Box,
-            { marginTop: 1 },
-            React.createElement(
-                Text,
-                { dimColor: true },
-                `${String(filtered.length)} brick(s)${query.length > 0 ? ` matching "${query}"` : ''}`,
-            ),
-        ),
+    return (
+        <Box flexDirection="column">
+            <Box marginBottom={1}>
+                <Text bold color="cyan">
+                    {catalogUrl !== undefined
+                        ? `Bricks — ${catalogUrl}`
+                        : 'Bricks — Aggregate View'}
+                </Text>
+            </Box>
+            {searching && (
+                <SearchBar
+                    query={query}
+                    onChange={setQuery}
+                    onSubmit={() => setSearching(false)}
+                    onCancel={() => {
+                        setSearching(false);
+                        setQuery('');
+                    }}
+                />
+            )}
+            <List
+                items={items}
+                onSelect={(value: string) => {
+                    const sepIdx = value.indexOf('::');
+                    if (sepIdx === -1) return;
+                    const name = value.slice(0, sepIdx);
+                    const url = value.slice(sepIdx + 2);
+                    if (name.length > 0 && url.length > 0) onOpen(name, url);
+                }}
+            />
+            <Box marginTop={1}>
+                <Text
+                    dimColor
+                >{`${String(filtered.length)} brick(s)${query.length > 0 ? ` matching "${query}"` : ''}`}</Text>
+            </Box>
+        </Box>
     );
 }

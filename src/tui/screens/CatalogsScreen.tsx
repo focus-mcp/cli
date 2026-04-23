@@ -6,7 +6,7 @@
  */
 
 import { Box, Text } from 'ink';
-import React from 'react';
+import type React from 'react';
 import { List } from '../components/List.tsx';
 import { useCatalogs } from '../hooks/useCatalogs.tsx';
 
@@ -15,10 +15,14 @@ interface CatalogsScreenProps {
 }
 
 export function CatalogsScreen({ onOpen }: CatalogsScreenProps): React.ReactElement {
-    const { catalogs, loading } = useCatalogs();
+    const { catalogs, loading, error } = useCatalogs();
 
     if (loading) {
-        return React.createElement(Text, null, 'Loading catalogs...');
+        return <Text>Loading catalogs...</Text>;
+    }
+
+    if (error !== null) {
+        return <Text color="red">Error: {error}</Text>;
     }
 
     const totalBricks = catalogs.reduce((sum, c) => sum + (c.brickCount ?? 0), 0);
@@ -34,26 +38,20 @@ export function CatalogsScreen({ onOpen }: CatalogsScreenProps): React.ReactElem
         },
     ];
 
-    return React.createElement(
-        Box,
-        { flexDirection: 'column' },
-        React.createElement(
-            Box,
-            { marginBottom: 1 },
-            React.createElement(Text, { bold: true, color: 'cyan' }, 'Catalog Sources'),
-        ),
-        React.createElement(List, {
-            items,
-            onSelect: (value: string) => onOpen(value === '__aggregate__' ? undefined : value),
-        }),
-        React.createElement(
-            Box,
-            { marginTop: 1 },
-            React.createElement(
-                Text,
-                { dimColor: true },
-                `${String(catalogs.length)} catalog(s) registered`,
-            ),
-        ),
+    return (
+        <Box flexDirection="column">
+            <Box marginBottom={1}>
+                <Text bold color="cyan">
+                    Catalog Sources
+                </Text>
+            </Box>
+            <List
+                items={items}
+                onSelect={(value: string) => onOpen(value === '__aggregate__' ? undefined : value)}
+            />
+            <Box marginTop={1}>
+                <Text dimColor>{`${String(catalogs.length)} catalog(s) registered`}</Text>
+            </Box>
+        </Box>
     );
 }

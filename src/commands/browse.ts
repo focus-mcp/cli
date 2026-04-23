@@ -12,6 +12,7 @@ import { render } from 'ink';
 import React from 'react';
 import { App } from '../tui/App.tsx';
 
-export function browseCommand(): void {
-    render(React.createElement(App));
+export async function browseCommand(): Promise<void> {
+    const { waitUntilExit } = render(React.createElement(App));
+    await waitUntilExit();
 }

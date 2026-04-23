@@ -6,7 +6,7 @@
  */
 
 import { Box, Text } from 'ink';
-import React from 'react';
+import type React from 'react';
 
 interface StatusBarProps {
     readonly screen: 'catalogs' | 'bricks' | 'details';
@@ -19,9 +19,9 @@ const HINTS: Record<string, string> = {
 };
 
 export function StatusBar({ screen }: StatusBarProps): React.ReactElement {
-    return React.createElement(
-        Box,
-        { borderStyle: 'single', borderColor: 'gray', paddingX: 1, marginTop: 1 },
-        React.createElement(Text, { dimColor: true }, HINTS[screen] ?? ''),
+    return (
+        <Box borderStyle="single" borderColor="gray" paddingX={1} marginTop={1}>
+            <Text dimColor>{HINTS[screen] ?? ''}</Text>
+        </Box>
     );
 }

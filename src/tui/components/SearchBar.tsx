@@ -7,7 +7,7 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import React from 'react';
+import type React from 'react';
 
 interface SearchBarProps {
     readonly query: string;
@@ -40,11 +40,11 @@ export function SearchBar({
         }
     });
 
-    return React.createElement(
-        Box,
-        { borderStyle: 'single', borderColor: 'cyan', paddingX: 1, marginBottom: 1 },
-        React.createElement(Text, { color: 'cyan' }, '/ '),
-        React.createElement(Text, null, query),
-        React.createElement(Text, { color: 'cyan' }, '█'),
+    return (
+        <Box borderStyle="single" borderColor="cyan" paddingX={1} marginBottom={1}>
+            <Text color="cyan">{'/ '}</Text>
+            <Text>{query}</Text>
+            <Text color="cyan">{'█'}</Text>
+        </Box>
     );
 }

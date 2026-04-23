@@ -199,7 +199,7 @@ async function main(argv: string[]): Promise<number> {
         case 'catalog':
             return runCatalog(rest);
         case 'browse':
-            browseCommand();
+            await browseCommand();
             return 0;
         case 'start': {
             await startCommand(rest);

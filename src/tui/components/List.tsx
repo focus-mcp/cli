@@ -7,7 +7,8 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 
 interface ListItem {
     readonly label: string;
@@ -36,18 +37,22 @@ export function List({ items, onSelect }: ListProps): React.ReactElement {
     });
 
     if (items.length === 0) {
-        return React.createElement(Text, { dimColor: true }, '(empty)');
+        return <Text dimColor>(empty)</Text>;
     }
 
-    return React.createElement(
-        Box,
-        { flexDirection: 'column' },
-        ...items.map((item, i) => {
-            const isSelected = i === cursor;
-            const props = isSelected
-                ? { key: item.value, color: 'cyan' as const }
-                : { key: item.value };
-            return React.createElement(Text, props, `${isSelected ? '> ' : '  '}${item.label}`);
-        }),
+    return (
+        <Box flexDirection="column">
+            {items.map((item, i) => {
+                const isSelected = i === cursor;
+                const label = `${isSelected ? '> ' : '  '}${item.label}`;
+                return isSelected ? (
+                    <Text key={item.value} color="cyan">
+                        {label}
+                    </Text>
+                ) : (
+                    <Text key={item.value}>{label}</Text>
+                );
+            })}
+        </Box>
     );
 }

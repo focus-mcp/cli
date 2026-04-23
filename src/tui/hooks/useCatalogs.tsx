@@ -18,15 +18,20 @@ export interface CatalogEntry extends CatalogSource {
 export function useCatalogs(): {
     readonly catalogs: CatalogEntry[];
     readonly loading: boolean;
+    readonly error: string | null;
 } {
     const [catalogs, setCatalogs] = useState<CatalogEntry[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        let cancelled = false;
+
         const adapter = new FilesystemCatalogStoreAdapter();
         adapter
             .readStore()
             .then((raw) => {
+                if (cancelled) return;
                 try {
                     const store = parseCatalogStore(raw);
                     const sources =
@@ -36,13 +41,19 @@ export function useCatalogs(): {
                     setCatalogs([...createDefaultStore().sources]);
                 }
             })
-            .catch(() => {
+            .catch((err: unknown) => {
+                if (cancelled) return;
+                setError(err instanceof Error ? err.message : String(err));
                 setCatalogs([...createDefaultStore().sources]);
             })
             .finally(() => {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             });
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
-    return { catalogs, loading };
+    return { catalogs, loading, error };
 }

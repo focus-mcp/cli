@@ -8,7 +8,7 @@
  */
 
 import { Box, useInput } from 'ink';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { StatusBar } from './components/StatusBar.tsx';
 import { BrickDetailsScreen } from './screens/BrickDetailsScreen.tsx';
 import { BricksScreen } from './screens/BricksScreen.tsx';
@@ -19,55 +19,49 @@ type Screen =
     | { readonly type: 'bricks'; readonly catalogUrl?: string }
     | { readonly type: 'details'; readonly brickName: string; readonly catalogUrl: string };
 
-function goBack(screen: Screen, setScreen: (s: Screen) => void): void {
-    if (screen.type === 'details') {
-        const url = screen.catalogUrl.length > 0 ? screen.catalogUrl : undefined;
-        if (url !== undefined) {
-            setScreen({ type: 'bricks', catalogUrl: url });
-        } else {
-            setScreen({ type: 'bricks' });
-        }
-    } else if (screen.type === 'bricks') {
-        setScreen({ type: 'catalogs' });
-    }
-}
-
-function openBricks(catalogUrl: string | undefined, setScreen: (s: Screen) => void): void {
-    if (catalogUrl !== undefined) {
-        setScreen({ type: 'bricks', catalogUrl });
-    } else {
-        setScreen({ type: 'bricks' });
-    }
-}
-
-export function App(): React.ReactElement {
+export function App() {
     const [screen, setScreen] = useState<Screen>({ type: 'catalogs' });
 
     useInput((input, key) => {
         if (input === 'q') process.exit(0);
-        if (key.escape) goBack(screen, setScreen);
+        if (key.escape) {
+            if (screen.type === 'bricks') setScreen({ type: 'catalogs' });
+            else if (screen.type === 'details') {
+                setScreen({ type: 'bricks', catalogUrl: screen.catalogUrl });
+            }
+        }
     });
 
-    return React.createElement(
-        Box,
-        { flexDirection: 'column', height: '100%' },
-        screen.type === 'catalogs' &&
-            React.createElement(CatalogsScreen, {
-                onOpen: (catalogUrl?: string) => openBricks(catalogUrl, setScreen),
-            }),
-        screen.type === 'bricks' &&
-            React.createElement(BricksScreen, {
-                ...(screen.catalogUrl !== undefined ? { catalogUrl: screen.catalogUrl } : {}),
-                onOpen: (brickName: string, brickCatalogUrl: string) =>
-                    setScreen({ type: 'details', brickName, catalogUrl: brickCatalogUrl }),
-                onBack: () => setScreen({ type: 'catalogs' }),
-            }),
-        screen.type === 'details' &&
-            React.createElement(BrickDetailsScreen, {
-                brickName: screen.brickName,
-                catalogUrl: screen.catalogUrl,
-                onBack: () => goBack(screen, setScreen),
-            }),
-        React.createElement(StatusBar, { screen: screen.type }),
+    return (
+        <Box flexDirection="column">
+            {screen.type === 'catalogs' && (
+                <CatalogsScreen
+                    onOpen={(url) =>
+                        setScreen(
+                            url !== undefined
+                                ? { type: 'bricks', catalogUrl: url }
+                                : { type: 'bricks' },
+                        )
+                    }
+                />
+            )}
+            {screen.type === 'bricks' && (
+                <BricksScreen
+                    {...(screen.catalogUrl !== undefined ? { catalogUrl: screen.catalogUrl } : {})}
+                    onOpen={(name, url) =>
+                        setScreen({ type: 'details', brickName: name, catalogUrl: url })
+                    }
+                    onBack={() => setScreen({ type: 'catalogs' })}
+                />
+            )}
+            {screen.type === 'details' && (
+                <BrickDetailsScreen
+                    brickName={screen.brickName}
+                    catalogUrl={screen.catalogUrl}
+                    onBack={() => setScreen({ type: 'bricks', catalogUrl: screen.catalogUrl })}
+                />
+            )}
+            <StatusBar screen={screen.type} />
+        </Box>
     );
 }

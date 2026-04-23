@@ -7,7 +7,7 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import React from 'react';
+import type React from 'react';
 import { useBricks } from '../hooks/useBricks.tsx';
 import { useInstalled } from '../hooks/useInstalled.tsx';
 
@@ -29,58 +29,50 @@ export function BrickDetailsScreen({
         if (key.escape) onBack();
     });
 
-    if (loading) return React.createElement(Text, null, 'Loading...');
+    if (loading) return <Text>Loading...</Text>;
 
     const brick = bricks.find((b) => b.name === brickName);
     if (brick === undefined) {
-        return React.createElement(
-            Box,
-            { flexDirection: 'column' },
-            React.createElement(Text, { color: 'red' }, `Brick "${brickName}" not found.`),
-            React.createElement(Text, { dimColor: true }, 'Press Esc to go back'),
+        return (
+            <Box flexDirection="column">
+                <Text color="red">{`Brick "${brickName}" not found.`}</Text>
+                <Text dimColor>Press Esc to go back</Text>
+            </Box>
         );
     }
 
     const isInstalled = installed.has(brickName);
 
-    return React.createElement(
-        Box,
-        { flexDirection: 'column', paddingX: 1 },
-        React.createElement(
-            Box,
-            { marginBottom: 1 },
-            React.createElement(Text, { bold: true, color: 'cyan' }, brick.name),
-            React.createElement(Text, null, '  '),
-            React.createElement(Text, { color: 'yellow' }, `v${brick.version}`),
-            isInstalled
-                ? React.createElement(Text, { color: 'green' }, '  ✓ installed')
-                : React.createElement(Text, null, ''),
-        ),
-        React.createElement(Text, null, brick.description),
-        React.createElement(
-            Box,
-            { marginTop: 1, flexDirection: 'column' },
-            React.createElement(Text, { bold: true }, 'Catalog:'),
-            React.createElement(Text, { dimColor: true }, brick.catalogUrl),
-        ),
-        brick.tags !== undefined && brick.tags.length > 0
-            ? React.createElement(
-                  Box,
-                  { marginTop: 1 },
-                  React.createElement(Text, { bold: true }, 'Tags: '),
-                  React.createElement(Text, { color: 'magenta' }, brick.tags.join(', ')),
-              )
-            : React.createElement(Box, null),
-        React.createElement(
-            Box,
-            { marginTop: 2 },
-            React.createElement(
-                Text,
-                { dimColor: true },
-                isInstalled
-                    ? 'Press Esc to go back  |  u: uninstall'
-                    : 'Press Esc to go back  |  i: install',
-            ),
-        ),
+    return (
+        <Box flexDirection="column" paddingX={1}>
+            <Box marginBottom={1}>
+                <Text bold color="cyan">
+                    {brick.name}
+                </Text>
+                <Text>{'  '}</Text>
+                <Text color="yellow">{`v${brick.version}`}</Text>
+                {isInstalled ? <Text color="green">{'  ✓ installed'}</Text> : <Text>{''}</Text>}
+            </Box>
+            <Text>{brick.description}</Text>
+            <Box marginTop={1} flexDirection="column">
+                <Text bold>Catalog:</Text>
+                <Text dimColor>{brick.catalogUrl}</Text>
+            </Box>
+            {brick.tags !== undefined && brick.tags.length > 0 ? (
+                <Box marginTop={1}>
+                    <Text bold>Tags: </Text>
+                    <Text color="magenta">{brick.tags.join(', ')}</Text>
+                </Box>
+            ) : (
+                <Box />
+            )}
+            <Box marginTop={2}>
+                <Text dimColor>
+                    {isInstalled
+                        ? 'Press Esc to go back  |  u: uninstall'
+                        : 'Press Esc to go back  |  i: install'}
+                </Text>
+            </Box>
+        </Box>
     );
 }
