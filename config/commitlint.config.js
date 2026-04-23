@@ -20,6 +20,7 @@ export default {
                 'ci',
                 'chore',
                 'revert',
+                'release',
             ],
         ],
         'subject-case': [2, 'never', ['upper-case', 'pascal-case', 'start-case']],
