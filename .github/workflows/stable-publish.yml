@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 FocusMCP contributors
+# SPDX-License-Identifier: MIT
+
+name: Stable Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: stable-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-stable:
+    name: Publish @focus-mcp/cli@latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          scope: '@focus-mcp'
+      - run: pnpm build
+      - name: Publish with latest tag
+        run: npm publish --access public 2>&1 || echo "  → skipped (already published?)"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
