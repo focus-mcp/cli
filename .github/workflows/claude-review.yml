@@ -24,6 +24,16 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          direct_prompt: |
-            Review this PR. Focus on code quality, security, consistency, and test coverage.
-            Leave inline comments on specific issues. Approve if clean, request changes if not.
+          prompt: |
+            Review this pull request as a senior engineer. Post inline comments on issues you find. At the end, post a summary review with verdict (approve / request changes / comment).
+
+            Focus areas (in order of priority):
+            1. **Correctness** — does the code do what the PR description claims? Any obvious bugs, race conditions, or broken edge cases?
+            2. **Security** — input validation, injection risks, unsafe shell/eval, secret leaks, unsafe deps.
+            3. **Test coverage** — are new code paths tested? Any missing edge-case tests?
+            4. **TypeScript strictness** — no `any`, proper types, `node:` protocol for stdlib imports.
+            5. **Consistency** — matches surrounding patterns, naming conventions, file layout.
+            6. **Docs** — public API changes reflected in README/AGENTS.md.
+
+            Be terse and concrete. If the PR is clean, say "LGTM" and approve. Do not hedge.
+            Reject `--no-verify` and any bypasses of CI gates in the code.
