@@ -163,7 +163,7 @@ describe('NpmInstallerAdapter', () => {
             expect(spawn).toHaveBeenCalledWith(
                 'npm',
                 ['install', '--prefix', BRICKS_DIR, '@focus-mcp/brick-echo@1.0.0'],
-                expect.objectContaining({ stdio: 'inherit', shell: false }),
+                expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'], shell: false }),
             );
         });
 
@@ -187,7 +187,7 @@ describe('NpmInstallerAdapter', () => {
                     'https://registry.example.com',
                     '@focus-mcp/brick-echo@1.0.0',
                 ],
-                expect.objectContaining({ stdio: 'inherit', shell: false }),
+                expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'], shell: false }),
             );
         });
 
@@ -198,7 +198,7 @@ describe('NpmInstallerAdapter', () => {
             );
 
             await expect(adapter.npmInstall('@focus-mcp/brick-echo', '1.0.0')).rejects.toThrow(
-                'npm install exited with code 1',
+                'npm install: exited with code 1',
             );
         });
     });
@@ -214,7 +214,7 @@ describe('NpmInstallerAdapter', () => {
             expect(spawn).toHaveBeenCalledWith(
                 'npm',
                 ['uninstall', '--prefix', BRICKS_DIR, '@focus-mcp/brick-echo'],
-                expect.objectContaining({ stdio: 'inherit', shell: false }),
+                expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'], shell: false }),
             );
         });
 
@@ -237,7 +237,7 @@ describe('NpmInstallerAdapter', () => {
                     'https://registry.example.com',
                     '@focus-mcp/brick-echo',
                 ],
-                expect.objectContaining({ stdio: 'inherit', shell: false }),
+                expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'], shell: false }),
             );
         });
 
@@ -247,7 +247,7 @@ describe('NpmInstallerAdapter', () => {
             );
 
             await expect(adapter.npmUninstall('@focus-mcp/brick-echo')).rejects.toThrow(
-                'npm uninstall exited with code 2',
+                'npm uninstall: exited with code 2',
             );
         });
     });
