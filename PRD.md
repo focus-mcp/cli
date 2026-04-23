@@ -5,8 +5,8 @@ SPDX-License-Identifier: MIT
 
 # FocusMCP CLI — Product Requirements Document
 
-> Périmètre : le **CLI officiel `@focusmcp/cli`** (repo `cli/`).
-> Pour la lib `@focusmcp/core` : voir [`core/PRD.md`](../core/PRD.md). Pour le catalogue : voir [`marketplace/PRD.md`](../marketplace/PRD.md). Le client Tauri (repo `client/`) est **gelé** — pas de UI bundlée au MVP.
+> Périmètre : le **CLI officiel `@focus-mcp/cli`** (repo `cli/`).
+> Pour la lib `@focus-mcp/core` : voir [`core/PRD.md`](../core/PRD.md). Pour le catalogue : voir [`marketplace/PRD.md`](../marketplace/PRD.md). Le client Tauri (repo `client/`) est **gelé** — pas de UI bundlée au MVP.
 
 ## Vision (rappel)
 
@@ -22,12 +22,12 @@ Le CLI est **le point d'entrée principal** de FocusMCP. Pivot CLI-first : tout 
 
 Le repo `cli/` contient :
 
-1. **Le binaire `focus`** — publié sous `@focusmcp/cli` sur npm, consommé via `npx` ou `npm install -g`.
-2. **Le transport stdio MCP** — `focus start` démarre un `StdioServerTransport` du SDK officiel MCP, routé vers le `createFocusMcp()` de `@focusmcp/core`.
+1. **Le binaire `focus`** — publié sous `@focus-mcp/cli` sur npm, consommé via `npx` ou `npm install -g`.
+2. **Le transport stdio MCP** — `focus start` démarre un `StdioServerTransport` du SDK officiel MCP, routé vers le `createFocusMcp()` de `@focus-mcp/core`.
 3. **Le brick manager local** — `focus list`, `focus info`, `focus add`, `focus remove`, `focus update` opèrent sur `~/.focus/center.json` + `~/.focus/center.lock`.
 4. **Le client marketplace** — résolution des briques depuis le catalogue officiel (et les catalogues tiers en P2).
 
-Le CLI **embarque `@focusmcp/core`**, il n'y a **pas** d'HTTP par défaut, et **pas** de UI bundlée (un `cli-manager` séparé existera en Phase 2 pour administrer le CLI à distance).
+Le CLI **embarque `@focus-mcp/core`**, il n'y a **pas** d'HTTP par défaut, et **pas** de UI bundlée (un `cli-manager` séparé existera en Phase 2 pour administrer le CLI à distance).
 
 ---
 
@@ -37,9 +37,9 @@ Le CLI **embarque `@focusmcp/core`**, il n'y a **pas** d'HTTP par défaut, et **
 AI client (Claude Code, Cursor, etc.)
        │ stdio (JSON-RPC)
        ▼
-@focusmcp/cli
+@focus-mcp/cli
   ├─ @modelcontextprotocol/sdk StdioServerTransport
-  ├─ @focusmcp/core (createFocusMcp)
+  ├─ @focus-mcp/core (createFocusMcp)
   │    Registry + EventBus + Router + bricks
   └─ center.json + center.lock (~/.focus/)
 ```
@@ -75,7 +75,7 @@ AI client (Claude Code, Cursor, etc.)
   }
   ```
 
-Les deux fichiers sont parsés par `src/center.ts` — validation structurelle uniquement ; la sémantique (semver, catalog URL, signature) est gérée par `@focusmcp/core`.
+Les deux fichiers sont parsés par `src/center.ts` — validation structurelle uniquement ; la sémantique (semver, catalog URL, signature) est gérée par `@focus-mcp/core`.
 
 ---
 
@@ -107,10 +107,10 @@ Toutes les sous-commandes métier sont des **fonctions pures** (input structuré
 
 ## Distribution
 
-- **Package npm** : `@focusmcp/cli` sous le scope `@focusmcp` (org npm réservée).
+- **Package npm** : `@focus-mcp/cli` sous le scope `@focusmcp` (org npm réservée).
 - **Installation** :
-  - `npx @focusmcp/cli start` — one-shot, idéal pour Claude Code.
-  - `npm install -g @focusmcp/cli` — installation globale, `focus` dans le `$PATH`.
+  - `npx @focus-mcp/cli start` — one-shot, idéal pour Claude Code.
+  - `npm install -g @focus-mcp/cli` — installation globale, `focus` dans le `$PATH`.
 - **Publish** : via Changesets (single package mode) + `release.yml` sur push `main`. Secret `NPM_TOKEN` requis.
 - **Provenance npm** activée (`publishConfig.provenance: true`) pour signer les tarballs via Sigstore.
 
@@ -120,7 +120,7 @@ Toutes les sous-commandes métier sont des **fonctions pures** (input structuré
 
 Trois couches de défense, empilées :
 
-1. **EventBus guards** (hérités de `@focusmcp/core`) — une brique ne peut émettre ni consommer que des événements déclarés dans son manifeste. Mismatch → fail fast au boot.
+1. **EventBus guards** (hérités de `@focus-mcp/core`) — une brique ne peut émettre ni consommer que des événements déclarés dans son manifeste. Mismatch → fail fast au boot.
 2. **Permissions utilisateur via `center.json`** — une brique désactivée (`enabled: false`) ne boote pas. `config` par brique est validé contre le manifeste avant forwarding.
 3. **Sandbox du process parent** — Claude Code et Cursor sandboxent déjà les serveurs MCP stdio (FS restreint, réseau filtré). Le CLI **ne cherche pas** à s'en échapper.
 
@@ -135,7 +135,7 @@ Parsers `center.json` / `center.lock` : validation structurelle stricte, rejet f
 - [x] Scaffolding repo (structure, CI, REUSE, biome, changesets)
 - [x] `focus list` + `focus info` + parsers `center.*`
 - [ ] `focus start` — transport stdio MCP fonctionnel (raccorde `createFocusMcp` + `StdioServerTransport`)
-- [ ] Publication `@focusmcp/cli@0.1.0` sur npm
+- [ ] Publication `@focus-mcp/cli@0.1.0` sur npm
 - [ ] README + docs d'install pour Claude Code
 
 ### P1
@@ -162,7 +162,7 @@ Parsers `center.json` / `center.lock` : validation structurelle stricte, rejet f
 | Build | **tsup** | Bundling (ESM, Node 22, dts pour l'API programmatique) |
 | Tests | **Vitest** | Unit (≥ 80 % coverage) |
 | Transport MCP | **@modelcontextprotocol/sdk** | `StdioServerTransport` officiel |
-| Lib FocusMCP | **@focusmcp/core** (git dep) | Registry + EventBus + Router |
+| Lib FocusMCP | **@focus-mcp/core** (git dep) | Registry + EventBus + Router |
 | Parsing CLI | **node:util `parseArgs`** | Dispatch sous-commandes (pas de dep externe) |
 | Lint | **Biome 2.x** | Style + qualité |
 | License | **REUSE** | SPDX headers |
@@ -179,9 +179,9 @@ Parsers `center.json` / `center.lock` : validation structurelle stricte, rejet f
 | **Transport primaire** | stdio MCP | Standard MCP ; Claude Code/Cursor spawnent des sous-processus stdio, pas des serveurs HTTP |
 | **HTTP** | Phase 2, derrière un flag | Gardé pour `cli-manager`, pas exposé par défaut pour limiter la surface |
 | **UI** | Pas bundlée | Séparation CLI ↔ UI ; `cli-manager` sera un repo dédié en P2 |
-| **`@focusmcp/core`** | Git dependency | Core n'est pas publié sur npm au MVP — git dep évite un release coupling prématuré |
-| **Changesets** | Single-package mode | `@focusmcp/cli` est un package unique ; `independent` n'a pas de sens ici |
-| **npm org** | `@focusmcp` (+ squat `focus-mcp`) | Scope officiel réservé ; distribution via npm, pas GitHub Releases (contrairement aux briques) |
+| **`@focus-mcp/core`** | Git dependency | Core n'est pas publié sur npm au MVP — git dep évite un release coupling prématuré |
+| **Changesets** | Single-package mode | `@focus-mcp/cli` est un package unique ; `independent` n'a pas de sens ici |
+| **npm org** | `@focusmcp` | Scope officiel réservé ; distribution via npm, pas GitHub Releases (contrairement aux briques) |
 | **CLI parsing** | `node:util` `parseArgs` | Pas de dépendance externe (commander, yargs) — API Node stable suffit |
 | **Coverage gate** | 80 % | Aligné sur marketplace/core ; `src/bin/` et `src/index.ts` sont exclus (surface fine, testée e2e) |
 

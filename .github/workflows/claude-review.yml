@@ -24,3 +24,6 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          direct_prompt: |
+            Review this PR. Focus on code quality, security, consistency, and test coverage.
+            Leave inline comments on specific issues. Approve if clean, request changes if not.

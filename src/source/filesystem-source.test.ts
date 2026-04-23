@@ -3,20 +3,20 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockReadFile } = vi.hoisted(() => ({
+const { mockReadFile, mockAccess } = vi.hoisted(() => ({
     mockReadFile: vi.fn(),
+    mockAccess: vi.fn(),
 }));
 
 vi.mock('node:fs/promises', () => ({
     readFile: mockReadFile,
+    access: mockAccess,
 }));
-
-// We cannot easily mock dynamic import() — we test loadModule indirectly via
-// the integration path. The unit tests below cover list() and readManifest().
 
 describe('FilesystemBrickSource', () => {
     beforeEach(() => {
         mockReadFile.mockReset();
+        mockAccess.mockReset();
     });
 
     it('list() returns only enabled bricks', async () => {
@@ -101,5 +101,73 @@ describe('FilesystemBrickSource', () => {
         });
 
         await expect(source.readManifest('catalog/missing-brick')).rejects.toThrow('ENOENT');
+    });
+
+    // ---------- safeBrickName edge cases (lines 17-18) ----------
+
+    it('readManifest() throws for empty brick name', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        await expect(source.readManifest('')).rejects.toThrow(/invalid brick name/i);
+    });
+
+    it('readManifest() throws for "." brick name', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        await expect(source.readManifest('.')).rejects.toThrow(/invalid brick name/i);
+    });
+
+    it('readManifest() throws for ".." brick name', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        await expect(source.readManifest('..')).rejects.toThrow(/invalid brick name/i);
+    });
+
+    // ---------- loadModule (lines 54-64) ----------
+
+    it('loadModule() calls access on the dist path first', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        mockAccess.mockResolvedValue(undefined);
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        // import() will fail because the path is not a real module — that is expected
+        await expect(source.loadModule('brick-a')).rejects.toThrow();
+        expect(mockAccess).toHaveBeenCalledWith('/fake/bricks/brick-a/dist/index.js');
+    });
+
+    it('loadModule() falls back to src/index.ts when dist/index.js is not accessible', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        mockAccess.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        // import() will fail because the path is not a real module — that is expected
+        await expect(source.loadModule('brick-a')).rejects.toThrow();
+        // access was called on dist path, then fell through to src path import
+        expect(mockAccess).toHaveBeenCalledWith('/fake/bricks/brick-a/dist/index.js');
     });
 });

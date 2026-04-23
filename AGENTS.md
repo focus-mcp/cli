@@ -17,7 +17,7 @@ Read [PRD.md](./PRD.md) for the complete CLI vision (commands, transport, distri
 
 - **Node.js ≥ 22** (LTS), **pnpm ≥ 10**, **TypeScript 5.7+** strict
 - **ESM only** (`"type": "module"`)
-- **Single package** — `@focusmcp/cli` published to npm under the `@focusmcp` scope
+- **Single package** — `@focus-mcp/cli` published to npm under the `@focusmcp` scope
 - Tests: **Vitest**
 - Lint/format: **Biome 2.x**
 - Build: **tsup** (ESM, Node 22 target, dts for the programmatic entry only)
@@ -38,14 +38,14 @@ Source code lives in `src/`:
 
 1. **Strict TDD** — write the test BEFORE the code (Red → Green → Refactor). Coverage ≥ 80 % global.
 2. **No `any`**, no untyped catch, no `!` non-null assertions.
-3. **No `console.log` outside `src/bin/` and `src/commands/`.** The Biome override allows console in those two folders (they are the CLI surface); everywhere else, use structured logging via `@focusmcp/core`.
+3. **No `console.log` outside `src/bin/` and `src/commands/`.** The Biome override allows console in those two folders (they are the CLI surface); everywhere else, use structured logging via `@focus-mcp/core`.
 4. **SPDX header** in every source file: `SPDX-FileCopyrightText: 2026 FocusMCP contributors` + `SPDX-License-Identifier: MIT`.
    For JSON files (no comment support), create a sibling `.license` file (REUSE convention).
 5. **Imports**: `node:` protocol (`import { parseArgs } from 'node:util'`).
 6. **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) — allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
 7. **No unsolicited features** — stick strictly to the requested scope.
 8. **stdio MCP is the canonical transport.** An HTTP admin API is Phase 2, gated behind an explicit flag; it is not the way AI clients attach.
-9. **`@focusmcp/core` is a git dependency** (`github:focus-mcp/core`). Do not try to publish `@focusmcp/core` to npm from this repo.
+9. **`@focus-mcp/core` is a git dependency** (`github:focus-mcp/core`). Do not try to publish `@focus-mcp/core` to npm from this repo.
 10. **Pure command functions.** Every `src/commands/<name>.ts` exports a function that takes already-parsed state (or structured input) and returns the string to print — no I/O, no `process.exit`. The binary in `src/bin/focus.ts` is the only layer allowed to touch `process.*`, stdin/stdout, and the filesystem.
 
 ## Commands
@@ -68,9 +68,9 @@ pnpm changeset            # create a changeset before merging
 AI client (Claude Code, Cursor, …)
        │ stdio (JSON-RPC / MCP)
        ▼
-@focusmcp/cli (focus start)
+@focus-mcp/cli (focus start)
   ├─ @modelcontextprotocol/sdk StdioServerTransport
-  ├─ @focusmcp/core (createFocusMcp)
+  ├─ @focus-mcp/core (createFocusMcp)
   │    Registry + EventBus + Router + bricks
   └─ ~/.focus/center.json + ~/.focus/center.lock
 ```
@@ -87,7 +87,7 @@ AI client (Claude Code, Cursor, …)
 
 - **No secrets** in the code (gitleaks blocks in pre-commit and CI).
 - **No `eval`**, no `new Function()`.
-- Every external input (center.json, center.lock) is validated structurally before reaching `@focusmcp/core`.
+- Every external input (center.json, center.lock) is validated structurally before reaching `@focus-mcp/core`.
 
 ## Git remote
 
