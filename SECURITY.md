@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT
 
 ## Supported versions
 
-`@focus-mcp/cli` is pre-MVP (`0.x`). No version is yet considered stable — we reserve the right to ship breaking changes in `0.y` releases.
+`@focus-mcp/cli` is actively maintained. The current stable release is **v1.1.0** (`latest` tag on npm). Patch and minor releases within the `1.x` line receive security fixes. Older `0.x` versions are no longer supported.
 
 ## Reporting a vulnerability
 

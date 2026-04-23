@@ -3,91 +3,148 @@ SPDX-FileCopyrightText: 2026 FocusMCP contributors
 SPDX-License-Identifier: MIT
 -->
 
-# FocusMCP — CLI
+# @focus-mcp/cli
 
-> **The primary entry point of FocusMCP.** Spawn MCP over stdio, manage bricks, connect any AI client.
->
-> [focusmcp.dev](https://focusmcp.dev) · [PRD](./PRD.md) · [Core](https://github.com/focus-mcp/core) · [Marketplace](https://github.com/focus-mcp/marketplace)
+> Focus your AI agents on what matters. Reduce context from 200k to ~2k tokens.
 
-`@focus-mcp/cli` is the fourth pillar of FocusMCP (after `core`, `client` and `marketplace`). It is the **primary, canonical entry point** of FocusMCP — the same binary is invoked by AI clients (Claude Code, Cursor, etc.) to bring FocusMCP's bricks into any MCP-compatible agent.
+[![npm](https://img.shields.io/npm/v/@focus-mcp/cli)](https://www.npmjs.com/package/@focus-mcp/cli)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![CI](https://github.com/focus-mcp/cli/actions/workflows/ci.yml/badge.svg)](https://github.com/focus-mcp/cli/actions/workflows/ci.yml)
+![Built with Claude Code](https://img.shields.io/badge/built_with-Claude_Code-8A2BE2)
 
-## Status
+## What
 
-Active development — pre-MVP. `focus list` and `focus info` are functional; `focus start` is a stub that will be completed in the next PR (stdio MCP transport). See [PRD.md](./PRD.md).
+FocusMCP is an MCP (Model Context Protocol) orchestrator. Instead of giving your AI agent ALL your tools at once — polluting its context window — you compose **bricks**: atomic MCP modules that load on demand.
+
+- **68+ official bricks** covering files, code intel, git, shell, reasoning, search, and more
+- **One CLI, one MCP server**, modular capabilities
+- Works with **Claude Code, Cursor, Codex, Gemini CLI**, any MCP-compatible AI
 
 ## Install
 
 ```bash
-# One-shot
-npx @focus-mcp/cli start
-
-# Or install globally
 npm install -g @focus-mcp/cli
-focus --version
 ```
 
-Requires Node.js ≥ 22.
+Or via the **Claude Code native plugin** (one-click setup):
 
-## Usage
-
-```bash
-focus help            # print help
-focus list            # list the bricks declared in ~/.focus/center.json
-focus info <name>     # show details for a single brick (requested + resolved version, catalog, config)
-focus start           # launch FocusMCP as an MCP server over stdio (attach from an AI client)
+```
+/plugin install focus-mcp
 ```
 
-### Wiring from Claude Code
+Requires **Node.js ≥ 22**.
 
-Add FocusMCP as an MCP server in your Claude Code config:
+## Quick start
+
+Add FocusMCP as an MCP server in your AI client config:
 
 ```json
 {
-  "mcpServers": {
-    "focusmcp": {
-      "command": "npx",
-      "args": ["-y", "@focus-mcp/cli", "start"]
+    "mcpServers": {
+        "focus": {
+            "command": "npx",
+            "args": ["-y", "@focus-mcp/cli", "start"]
+        }
     }
-  }
 }
 ```
 
-The CLI inherits Claude Code's sandbox — stdin/stdout are reserved for the MCP protocol, stderr carries logs.
+For **Claude Code** specifically, this is already wired via the native plugin above.
 
-## Layout
-
-```
-src/
-  bin/focus.ts         — CLI entry point (shebang, parseArgs dispatch)
-  commands/
-    list.ts            — `focus list`
-    info.ts            — `focus info <name>`
-    start.ts           — `focus start` (stub, stdio MCP coming next)
-  center.ts            — parsers for ~/.focus/center.json and ~/.focus/center.lock
-  index.ts             — programmatic API (empty for now)
-config/                — vitest, biome (via root), commitlint, lint-staged, gitleaks
-.github/               — CI, release, CodeQL, templates, renovate
-```
-
-## Scripts
+Then browse and manage bricks:
 
 ```bash
-pnpm install
-pnpm lint              # Biome
-pnpm typecheck         # tsc --noEmit
-pnpm test              # Vitest
-pnpm test:coverage     # Vitest + coverage (≥ 80% gate)
-pnpm build             # tsup (dist/index.js + dist/bin/focus.js)
-pnpm changeset         # create a changeset before merging
+focus browse          # Interactive TUI — browse, search, install/uninstall bricks
+focus search git      # Search the catalog for bricks matching "git"
+focus add echo        # Install the "echo" brick
+focus list            # Show all installed bricks
+focus info echo       # Show details for a specific brick
 ```
 
-## Versioning & publishing
+## Commands
 
-`@focus-mcp/cli` is a single npm package versioned via Changesets. `develop` is the base branch; merging a "Version Packages" PR on `main` triggers `release.yml`, which publishes to npm and creates a GitHub Release (requires the `NPM_TOKEN` repo secret).
+| Command | Description |
+|---|---|
+| `focus list` | List installed bricks (reads `~/.focus/center.json`) |
+| `focus info <name>` | Show details for a brick (version, catalog, config) |
+| `focus start` | Launch FocusMCP as an MCP server over stdio |
+| `focus add <name>` | Install a brick from the catalog |
+| `focus remove <name>` | Uninstall a brick |
+| `focus search <query>` | Search the catalog |
+| `focus catalog` | Show and manage catalog sources |
+| `focus browse` | Interactive TUI browser (see below) |
 
-## Dependency on `@focus-mcp/core`
+## Interactive TUI — `focus browse`
 
-`@focus-mcp/core` is referenced as a **git dependency** (`github:focus-mcp/core`) because the monorepo that hosts it does not publish to npm at MVP. Local dev can swap the dep for a workspace link (`pnpm link ../core/packages/core`) — the CLI only uses the public API of `createFocusMcp`.
+`focus browse` opens a full-screen terminal interface to explore, search, and manage bricks without leaving your terminal.
+
+```
+┌─ Bricks (68) ────────────────┬─ echo ───────────────────────────────────┐
+│ > echo              ✓        │                                          │
+│   indexer                    │  A simple echo brick for testing.        │
+│   shell                      │                                          │
+│   git-log                    │  Version   ^1.0.0                        │
+│   web-search                 │  Source    @focus-mcp/echo               │
+│   …                          │  Status    installed                     │
+│                              │                                          │
+│  / search  i install         │  [i] Install   [u] Uninstall             │
+│  ↑↓ nav    Enter open        │  [?] Help                                │
+└──────────────────────────────┴──────────────────────────────────────────┘
+```
+
+**Keybindings:**
+
+| Key | Action |
+|---|---|
+| `↑` / `↓` | Navigate the brick list |
+| `Enter` | Open brick details |
+| `/` | Search / filter |
+| `i` | Install selected brick |
+| `u` | Uninstall selected brick |
+| `?` | Toggle help overlay |
+| `q` / `Esc` | Quit |
+
+## Architecture
+
+```
+AI client (Claude Code, Cursor, Codex, …)
+       │ stdio (JSON-RPC / MCP)
+       ▼
+@focus-mcp/cli  (this package)
+  ├─ @modelcontextprotocol/sdk  StdioServerTransport
+  ├─ @focus-mcp/core            Registry + EventBus + Router + brick loader
+  └─ ~/.focus/center.json       user brick declarations
+```
+
+**Bricks** are atomic MCP modules. Each brick exposes exactly one domain of tools to the AI agent. You declare which bricks you want in `~/.focus/center.json`; FocusMCP loads them on demand when `focus start` is called.
+
+**Why not give the agent all tools at once?** Because a 200k-token context window filled with hundreds of tool descriptions leaves very little room for actual work. FocusMCP keeps the agent's context lean — ~2k tokens for the orchestrator itself — and loads domain-specific tools only when needed.
+
+## Links
+
+- **Marketplace**: <https://github.com/focus-mcp/marketplace>
+- **Core library**: <https://github.com/focus-mcp/core>
+- **Official catalog**: <https://raw.githubusercontent.com/focus-mcp/marketplace/main/publish/catalog.json>
+- **Website**: <https://focusmcp.dev>
+
+## AI-assisted development
+
+FocusMCP was built with heavy Claude Code assistance — its architecture, implementation,
+docs, and tests have all been co-authored with AI. We embrace this openly because:
+
+1. **Transparency matters** — we'd rather disclose it than pretend otherwise
+2. **AI tooling is the context** — we're building tools for AI agents, it makes sense to use them
+3. **Quality over origin** — what matters is that the code is tested, reviewed, and working
+
+**Your AI-assisted contributions are welcome.** We don't require you to hide the fact that
+Claude, Copilot, Cursor, or any other tool helped you. What we do expect:
+
+- Tests pass, code is typed, lint is green
+- You've read the diff and understand what the PR does
+- Conventional Commits, clear PR description
+- You can explain your design choices during review
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full guidelines.
 
 ## License
 
