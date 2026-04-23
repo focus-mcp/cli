@@ -3,8 +3,9 @@
 
 /**
  * BrickDetailsScreen — full information about a selected brick.
- * Shows name, version, description, catalog, tags, and install status.
- * Supports i (install) and u (uninstall) keyboard actions.
+ * Shows name, version, description, catalog, tags, tools, and install status.
+ * Supports i (install), u (uninstall), Esc (back).
+ * The help overlay is managed by App and passed via showHelp prop.
  */
 
 import { Box, Text, useInput } from 'ink';
@@ -22,6 +23,7 @@ interface BrickDetailsScreenProps {
     readonly brickName: string;
     readonly catalogUrl: string;
     readonly onBack: () => void;
+    readonly showHelp: boolean;
 }
 
 type ActionStatus =
@@ -30,6 +32,8 @@ type ActionStatus =
     | { state: 'uninstalling' }
     | { state: 'success'; message: string }
     | { state: 'error'; error: string };
+
+const MAX_TOOLS_DETAIL = 10;
 
 function buildIO() {
     return {
@@ -43,6 +47,7 @@ export function BrickDetailsScreen({
     brickName,
     catalogUrl,
     onBack,
+    showHelp: _showHelp,
 }: BrickDetailsScreenProps): React.ReactElement {
     const { bricks, loading } = useBricks(catalogUrl);
     const { installed, refresh } = useInstalled();
@@ -106,38 +111,54 @@ export function BrickDetailsScreen({
     }
 
     const isInstalled = installed.has(brickName);
+    const visibleTools = brick.tools.slice(0, MAX_TOOLS_DETAIL);
+    const remainingTools = brick.tools.length - MAX_TOOLS_DETAIL;
 
     return (
         <Box flexDirection="column" paddingX={1}>
-            <Box marginBottom={1}>
+            <Box marginBottom={1} gap={2}>
                 <Text bold color="cyan">
                     {brick.name}
                 </Text>
-                <Text>{'  '}</Text>
                 <Text color="yellow">{`v${brick.version}`}</Text>
-                {isInstalled ? <Text color="green">{'  ✓ installed'}</Text> : <Text>{''}</Text>}
+                {isInstalled ? (
+                    <Text color="green">{'● installed'}</Text>
+                ) : (
+                    <Text dimColor>{'○ not installed'}</Text>
+                )}
             </Box>
-            <Text>{brick.description}</Text>
-            <Box marginTop={1} flexDirection="column">
+            <Box marginBottom={1}>
+                <Text>{brick.description}</Text>
+            </Box>
+            <Box marginBottom={1} flexDirection="column">
                 <Text bold>Catalog:</Text>
                 <Text dimColor>{brick.catalogUrl}</Text>
             </Box>
-            {brick.tags !== undefined && brick.tags.length > 0 ? (
-                <Box marginTop={1}>
+            {brick.tools.length > 0 && (
+                <Box marginBottom={1} flexDirection="column">
+                    <Text bold>Tools:</Text>
+                    {visibleTools.map((t) => (
+                        <Text key={t.name} dimColor>{`  • ${t.name} — ${t.description}`}</Text>
+                    ))}
+                    {remainingTools > 0 && (
+                        <Text dimColor>{`  + ${String(remainingTools)} more`}</Text>
+                    )}
+                </Box>
+            )}
+            {brick.tags !== undefined && brick.tags.length > 0 && (
+                <Box marginBottom={1}>
                     <Text bold>Tags: </Text>
                     <Text color="magenta">{brick.tags.join(', ')}</Text>
                 </Box>
-            ) : (
-                <Box />
             )}
             {actionStatus.state === 'installing' && (
                 <Box marginTop={1}>
-                    <Text color="yellow">Installing...</Text>
+                    <Text color="yellow">{`Installing... @focus-mcp/brick-${brickName}`}</Text>
                 </Box>
             )}
             {actionStatus.state === 'uninstalling' && (
                 <Box marginTop={1}>
-                    <Text color="yellow">Uninstalling...</Text>
+                    <Text color="yellow">{`Uninstalling... @focus-mcp/brick-${brickName}`}</Text>
                 </Box>
             )}
             {actionStatus.state === 'success' && (
@@ -153,8 +174,8 @@ export function BrickDetailsScreen({
             <Box marginTop={2}>
                 <Text dimColor>
                     {isInstalled
-                        ? 'Press Esc to go back  |  u: uninstall'
-                        : 'Press Esc to go back  |  i: install'}
+                        ? '[u] uninstall  Esc back  ? help'
+                        : '[i] install  Esc back  ? help'}
                 </Text>
             </Box>
         </Box>

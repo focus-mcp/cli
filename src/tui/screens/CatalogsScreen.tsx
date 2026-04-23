@@ -11,7 +11,7 @@ import { List } from '../components/List.tsx';
 import { useCatalogs } from '../hooks/useCatalogs.tsx';
 
 interface CatalogsScreenProps {
-    readonly onOpen: (catalogUrl?: string) => void;
+    readonly onOpen: (catalogUrl?: string, catalogName?: string) => void;
 }
 
 export function CatalogsScreen({ onOpen }: CatalogsScreenProps): React.ReactElement {
@@ -30,7 +30,7 @@ export function CatalogsScreen({ onOpen }: CatalogsScreenProps): React.ReactElem
     const items = [
         ...catalogs.map((c) => ({
             label: `${c.enabled ? '🟢' : '🔴'} ${c.name.padEnd(30)} ${String(c.brickCount ?? 0).padEnd(6)} bricks    ${c.enabled ? 'active' : 'disabled'}`,
-            value: c.url,
+            value: `${c.url}::${c.name}`,
         })),
         {
             label: `📊 Aggregate view             ${String(totalBricks).padEnd(6)} bricks    all active`,
@@ -40,14 +40,22 @@ export function CatalogsScreen({ onOpen }: CatalogsScreenProps): React.ReactElem
 
     return (
         <Box flexDirection="column">
-            <Box marginBottom={1}>
-                <Text bold color="cyan">
-                    Catalog Sources
-                </Text>
-            </Box>
             <List
                 items={items}
-                onSelect={(value: string) => onOpen(value === '__aggregate__' ? undefined : value)}
+                onSelect={(value: string) => {
+                    if (value === '__aggregate__') {
+                        onOpen(undefined, 'All Catalogs');
+                        return;
+                    }
+                    const sepIdx = value.indexOf('::');
+                    if (sepIdx === -1) {
+                        onOpen(value, undefined);
+                        return;
+                    }
+                    const url = value.slice(0, sepIdx);
+                    const name = value.slice(sepIdx + 2);
+                    onOpen(url, name.length > 0 ? name : undefined);
+                }}
             />
             <Box marginTop={1}>
                 <Text dimColor>{`${String(catalogs.length)} catalog(s) registered`}</Text>
