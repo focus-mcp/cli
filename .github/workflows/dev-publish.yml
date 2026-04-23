@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: dev-publish-${{ github.ref }}
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   publish-dev:
-    name: Publish @focusmcp/cli@dev
+    name: Publish @focus-mcp/cli@dev
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -28,7 +29,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-          scope: '@focusmcp'
+          scope: '@focus-mcp'
       - name: Compute dev version
         id: version
         run: |

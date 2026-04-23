@@ -1,5 +1,5 @@
 {
-    "name": "@focusmcp/cli",
+    "name": "@focus-mcp/cli",
     "version": "0.0.0",
     "private": false,
     "description": "FocusMCP CLI — the primary entry point of FocusMCP. Spawns MCP over stdio and manages bricks (list, info, start, add, remove, update).",
@@ -64,7 +64,7 @@
     "devDependencies": {
         "@biomejs/biome": "^2.2.0",
         "@changesets/cli": "^2.27.0",
-        "@focusmcp/core": "file:../core/packages/core",
+        "@focus-mcp/core": "file:../core/packages/core",
         "@commitlint/cli": "^19.6.0",
         "@commitlint/config-conventional": "^19.6.0",
         "@commitlint/types": "^19.8.1",

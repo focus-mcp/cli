@@ -74,7 +74,7 @@ const {
     };
 });
 
-vi.mock('@focusmcp/core', () => ({
+vi.mock('@focus-mcp/core', () => ({
     createFocusMcp: () => ({
         start: mockStart,
         stop: mockStop,
@@ -1629,7 +1629,7 @@ describe('startCommand', () => {
         describe('focus_remove', () => {
             it('returns success message on remove', async () => {
                 mockRemoveCommand.mockResolvedValue(
-                    'Removed my-brick (package: @focusmcp/my-brick)',
+                    'Removed my-brick (package: @focus-mcp/my-brick)',
                 );
 
                 const { startCommand } = await import('./start.ts');
