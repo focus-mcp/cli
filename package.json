@@ -2,7 +2,7 @@
     "name": "@focus-mcp/cli",
     "version": "1.1.0",
     "private": false,
-    "description": "FocusMCP CLI — the primary entry point of FocusMCP. Spawns MCP over stdio and manages bricks (list, info, start, add, remove, update).",
+    "description": "Focus your AI agents on what matters. 68+ bricks, 1 MCP server, modular context — from 200k to 2k tokens. Works with Claude Code, Cursor, Codex.",
     "license": "MIT",
     "type": "module",
     "engines": {
@@ -14,18 +14,29 @@
         "type": "git",
         "url": "git+https://github.com/focus-mcp/cli.git"
     },
-    "homepage": "https://focusmcp.dev",
+    "homepage": "https://github.com/focus-mcp/cli#readme",
     "bugs": {
         "url": "https://github.com/focus-mcp/cli/issues"
     },
     "keywords": [
         "mcp",
         "model-context-protocol",
-        "focusmcp",
-        "cli",
         "ai",
-        "claude-code"
+        "llm",
+        "cli",
+        "claude-code",
+        "claude",
+        "cursor",
+        "codex",
+        "focus",
+        "bricks",
+        "orchestrator",
+        "tui",
+        "ink",
+        "context-engineering",
+        "agent-tools"
     ],
+    "author": "FocusMCP contributors",
     "bin": {
         "focus": "./dist/bin/focus.js"
     },
