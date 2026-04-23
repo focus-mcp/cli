@@ -26,11 +26,22 @@ FocusMCP is an MCP (Model Context Protocol) orchestrator. Instead of giving your
 npm install -g @focus-mcp/cli
 ```
 
-Or via the **Claude Code native plugin** (one-click setup):
+Or via the **Claude Code native plugin**:
 
+### Install for Claude Code
+
+**Option 1 — Two lines (works today)**
 ```
-/plugin install focus-mcp
+/plugin marketplace add focus-mcp/cli
+/plugin install focus-mcp@focus-mcp-cli
 ```
+
+**Option 2 — Manual MCP add**
+```bash
+claude mcp add focus-mcp npx @focus-mcp/cli start
+```
+
+*(Official single-liner `/plugin install focus-mcp@claude-plugins-official` coming once Anthropic accepts the submission.)*
 
 Requires **Node.js ≥ 22**.
 

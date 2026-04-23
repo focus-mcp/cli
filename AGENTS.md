@@ -58,7 +58,11 @@ The repo ships a native Claude Code plugin in `.claude-plugin/plugin.json` (v1.1
 }
 ```
 
-Install in one command: `/plugin install focus-mcp`.
+Install with two commands (works today):
+```
+/plugin marketplace add focus-mcp/cli
+/plugin install focus-mcp@focus-mcp-cli
+```
 
 ## Stack
 
@@ -82,7 +86,7 @@ Source code lives in `src/`:
 - `src/center.ts` — parsers for `~/.focus/center.json` and `~/.focus/center.lock`
 - `src/index.ts` — programmatic API (re-exports only)
 
-The Claude Code native plugin lives in `.claude-plugin/plugin.json` — it wires `focus start` as an MCP server automatically when installed via `/plugin install focus-mcp`.
+The Claude Code native plugin lives in `.claude-plugin/plugin.json` — it wires `focus start` as an MCP server. Install via the marketplace manifest in `.claude-plugin/marketplace.json` (see install instructions above).
 
 ## CLI commands (v1.1.0 — all implemented)
 

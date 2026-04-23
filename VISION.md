@@ -18,7 +18,7 @@ AI agents waste context on tools they don't use. Give them 100 tools, they waste
 - **One server, many tools** — agents see a single MCP endpoint, but the tools behind it are composed dynamically
 - **Marketplace-first** — 68+ official bricks, extensible via third-party catalogs
 - **Interactive browser** — `focus browse` TUI to explore, install, and manage bricks without leaving the terminal
-- **One-click setup** — native Claude Code plugin (`/plugin install focus-mcp`)
+- **Plugin setup** — native Claude Code plugin via `/plugin marketplace add focus-mcp/cli` then `/plugin install focus-mcp@focus-mcp-cli`
 
 ## Principles
 
