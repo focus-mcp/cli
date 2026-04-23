@@ -19,6 +19,7 @@ import { HttpFetchAdapter } from '../adapters/http-fetch-adapter.ts';
 import { NpmInstallerAdapter } from '../adapters/npm-installer-adapter.ts';
 import { parseCenterJson, parseCenterLock } from '../center.ts';
 import { addCommand } from '../commands/add.ts';
+import { browseCommand } from '../commands/browse.ts';
 import { catalogCommand } from '../commands/catalog.ts';
 import { infoCommand } from '../commands/info.ts';
 import { listCommand } from '../commands/list.ts';
@@ -38,6 +39,7 @@ Commands:
   remove <name>    Uninstall a brick
   search [query]   Search bricks in the catalog
   catalog          Manage catalog sources (add|remove|list)
+  browse           Interactive TUI to browse catalogs and bricks
   start            Launch FocusMCP as a stdio MCP server (AI clients attach here)
   help             Print this help
 
@@ -196,6 +198,9 @@ async function main(argv: string[]): Promise<number> {
             return runSearch(rest);
         case 'catalog':
             return runCatalog(rest);
+        case 'browse':
+            await browseCommand();
+            return 0;
         case 'start': {
             await startCommand(rest);
             // Keep the process alive until a signal terminates it

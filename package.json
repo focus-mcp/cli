@@ -1,6 +1,6 @@
 {
     "name": "@focus-mcp/cli",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "private": false,
     "description": "FocusMCP CLI — the primary entry point of FocusMCP. Spawns MCP over stdio and manages bricks (list, info, start, add, remove, update).",
     "license": "MIT",
@@ -59,20 +59,24 @@
         "prepare": "husky"
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.0.0"
+        "@modelcontextprotocol/sdk": "^1.0.0",
+        "ink": "^5.0.0",
+        "react": "^18.3.0"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.2.0",
         "@changesets/cli": "^2.27.0",
-        "@focus-mcp/core": "file:../core/packages/core",
         "@commitlint/cli": "^19.6.0",
         "@commitlint/config-conventional": "^19.6.0",
         "@commitlint/types": "^19.8.1",
+        "@focus-mcp/core": "file:../core/packages/core",
         "@types/node": "^22.10.0",
+        "@types/react": "^18.3.0",
         "@vitest/coverage-v8": "^3.2.0",
         "husky": "^9.1.0",
         "lint-staged": "^15.2.0",
         "tsup": "^8.3.0",
+        "tsx": "^4.21.0",
         "typescript": "^5.7.0",
         "vitest": "^3.2.0"
     },

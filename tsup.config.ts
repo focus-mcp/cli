@@ -17,6 +17,10 @@ export default defineConfig({
     format: ['esm'],
     target: 'node22',
     platform: 'node',
+    esbuildOptions(options) {
+        options.jsx = 'automatic';
+        options.jsxImportSource = 'react';
+    },
     // @focus-mcp/core is consumed locally via a file: dep at build time.
     // We bundle it into dist so the published tarball is self-contained
     // and end users don't have to install @focus-mcp/core themselves.
