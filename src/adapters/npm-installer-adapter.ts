@@ -58,14 +58,21 @@ const BRICKS_DIR = join(FOCUS_DIR, 'bricks');
 function runNpm(args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
         const child = spawn('npm', args, {
-            stdio: 'inherit',
+            stdio: ['ignore', 'pipe', 'pipe'],
             shell: false,
+        });
+        let stderr = '';
+        child.stderr?.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString();
         });
         child.on('close', (code) => {
             if (code === 0) {
                 resolve();
             } else {
-                reject(new Error(`npm ${args[0]} exited with code ${String(code)}`));
+                const msg =
+                    stderr.trim().split('\n').slice(-3).join(' ') ||
+                    `exited with code ${String(code)}`;
+                reject(new Error(`npm ${args[0]}: ${msg}`));
             }
         });
         child.on('error', reject);

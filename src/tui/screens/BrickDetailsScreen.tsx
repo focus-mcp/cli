@@ -4,10 +4,17 @@
 /**
  * BrickDetailsScreen — full information about a selected brick.
  * Shows name, version, description, catalog, tags, and install status.
+ * Supports i (install) and u (uninstall) keyboard actions.
  */
 
 import { Box, Text, useInput } from 'ink';
 import type React from 'react';
+import { useState } from 'react';
+import { FilesystemCatalogStoreAdapter } from '../../adapters/catalog-store-adapter.ts';
+import { HttpFetchAdapter } from '../../adapters/http-fetch-adapter.ts';
+import { NpmInstallerAdapter } from '../../adapters/npm-installer-adapter.ts';
+import { addCommand } from '../../commands/add.ts';
+import { removeCommand } from '../../commands/remove.ts';
 import { useBricks } from '../hooks/useBricks.tsx';
 import { useInstalled } from '../hooks/useInstalled.tsx';
 
@@ -17,16 +24,73 @@ interface BrickDetailsScreenProps {
     readonly onBack: () => void;
 }
 
+type ActionStatus =
+    | { state: 'idle' }
+    | { state: 'installing' }
+    | { state: 'uninstalling' }
+    | { state: 'success'; message: string }
+    | { state: 'error'; error: string };
+
+function buildIO() {
+    return {
+        fetch: new HttpFetchAdapter(),
+        store: new FilesystemCatalogStoreAdapter(),
+        installer: new NpmInstallerAdapter(),
+    };
+}
+
 export function BrickDetailsScreen({
     brickName,
     catalogUrl,
     onBack,
 }: BrickDetailsScreenProps): React.ReactElement {
     const { bricks, loading } = useBricks(catalogUrl);
-    const { installed } = useInstalled();
+    const { installed, refresh } = useInstalled();
+    const [actionStatus, setActionStatus] = useState<ActionStatus>({ state: 'idle' });
 
-    useInput((_input, key) => {
+    async function performInstall(): Promise<void> {
+        setActionStatus({ state: 'installing' });
+        try {
+            const message = await addCommand({ brickName, io: buildIO() });
+            setActionStatus({ state: 'success', message });
+            setTimeout(() => {
+                refresh();
+                setActionStatus({ state: 'idle' });
+            }, 1500);
+        } catch (err) {
+            const error = err instanceof Error ? err.message : String(err);
+            setActionStatus({ state: 'error', error });
+        }
+    }
+
+    async function performUninstall(): Promise<void> {
+        setActionStatus({ state: 'uninstalling' });
+        try {
+            const message = await removeCommand({
+                brickName,
+                io: { installer: new NpmInstallerAdapter() },
+            });
+            setActionStatus({ state: 'success', message });
+            setTimeout(() => {
+                refresh();
+                setActionStatus({ state: 'idle' });
+            }, 1500);
+        } catch (err) {
+            const error = err instanceof Error ? err.message : String(err);
+            setActionStatus({ state: 'error', error });
+        }
+    }
+
+    useInput((input, key) => {
         if (key.escape) onBack();
+        if (actionStatus.state !== 'idle') return;
+        const isInstalled = installed.has(brickName);
+        if (input === 'i' && !isInstalled) {
+            void performInstall();
+        }
+        if (input === 'u' && isInstalled) {
+            void performUninstall();
+        }
     });
 
     if (loading) return <Text>Loading...</Text>;
@@ -65,6 +129,26 @@ export function BrickDetailsScreen({
                 </Box>
             ) : (
                 <Box />
+            )}
+            {actionStatus.state === 'installing' && (
+                <Box marginTop={1}>
+                    <Text color="yellow">Installing...</Text>
+                </Box>
+            )}
+            {actionStatus.state === 'uninstalling' && (
+                <Box marginTop={1}>
+                    <Text color="yellow">Uninstalling...</Text>
+                </Box>
+            )}
+            {actionStatus.state === 'success' && (
+                <Box marginTop={1}>
+                    <Text color="green">{`✓ ${actionStatus.message}`}</Text>
+                </Box>
+            )}
+            {actionStatus.state === 'error' && (
+                <Box marginTop={1}>
+                    <Text color="red">{`✗ ${actionStatus.error}`}</Text>
+                </Box>
             )}
             <Box marginTop={2}>
                 <Text dimColor>
