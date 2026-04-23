@@ -1,6 +1,6 @@
 {
     "name": "@focus-mcp/cli",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "private": false,
     "description": "FocusMCP CLI — the primary entry point of FocusMCP. Spawns MCP over stdio and manages bricks (list, info, start, add, remove, update).",
     "license": "MIT",

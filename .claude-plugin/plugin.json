@@ -1,0 +1,19 @@
+{
+    "name": "focus-mcp",
+    "version": "1.1.0",
+    "description": "FocusMCP — MCP orchestrator that reduces AI context from 200k to ~2k tokens. Compose AI tools (bricks) on demand without polluting context.",
+    "author": {
+        "name": "FocusMCP contributors",
+        "url": "https://github.com/focus-mcp"
+    },
+    "homepage": "https://github.com/focus-mcp/cli",
+    "repository": "https://github.com/focus-mcp/cli",
+    "license": "MIT",
+    "keywords": ["mcp", "tools", "orchestrator", "focus", "bricks"],
+    "mcpServers": {
+        "focus": {
+            "command": "npx",
+            "args": ["-y", "@focus-mcp/cli@latest", "start"]
+        }
+    }
+}
