@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('ink', () => ({
-    render: vi.fn(),
+    render: vi.fn().mockReturnValue({ waitUntilExit: vi.fn().mockResolvedValue(undefined) }),
 }));
 
 vi.mock('react', () => ({
@@ -17,10 +17,10 @@ vi.mock('../tui/App.tsx', () => ({
 }));
 
 describe('browseCommand', () => {
-    it('calls render with App element', async () => {
+    it('calls render and awaits exit', async () => {
         const { render } = await import('ink');
         const { browseCommand } = await import('./browse.ts');
-        browseCommand();
+        await browseCommand();
         expect(render).toHaveBeenCalledOnce();
     });
 });
