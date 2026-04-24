@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 FocusMCP contributors
 // SPDX-License-Identifier: MIT
 
+import { DEFAULT_CATALOG_URL } from '@focus-mcp/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatalogStoreIO } from '../adapters/catalog-store-adapter.ts';
 import { catalogCommand } from './catalog.ts';
@@ -23,7 +24,7 @@ vi.mock('@focus-mcp/core', async (importOriginal) => {
 
 // ---------- helpers ----------
 
-const DEFAULT_URL = 'https://focus-mcp.github.io/marketplace/catalog.json';
+const DEFAULT_URL = DEFAULT_CATALOG_URL;
 const EXTRA_URL = 'https://example.com/catalog.json';
 
 function makeStoreIO(sourcesPayload: unknown = { sources: [] }): CatalogStoreIO {
