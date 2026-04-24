@@ -2046,13 +2046,12 @@ describe('startCommand', () => {
         expect(() => minimalLogger.warn()).not.toThrow();
         expect(() => minimalLogger.error()).not.toThrow();
     });
-});
 
-// ---------- enrichStartError (Missing dependency actionable message) ----------
+    // ---------- enrichStartError — Missing dependency actionable message ----------
 
-describe('enrichStartError — Missing dependency', () => {
-    it('enriches a Missing dependency error with actionable suggestions via loadBricks failure', async () => {
-        // Exercise enrichStartError indirectly: load with a Missing dependency failure
+    it('enriches a Missing dependency error with actionable focus commands', async () => {
+        // Simulate a brick that fails to load with a Missing dependency error.
+        // enrichStartError intercepts the message and adds recovery hints.
         mockLoadBricks.mockResolvedValueOnce({
             bricks: [],
             failures: [
@@ -2066,30 +2065,23 @@ describe('enrichStartError — Missing dependency', () => {
             JSON.stringify({ bricks: { codebase: { version: '1.0.0', enabled: true } } }),
         );
 
-        const stderrChunks: string[] = [];
-        const origStderrWrite = process.stderr.write.bind(process.stderr);
-        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
-            stderrChunks.push(String(chunk));
-            return origStderrWrite(chunk as string);
-        });
+        const { startCommand } = await import('./start.ts');
+        // stdio mode blocks forever — run without await
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
 
-        try {
-            const { startCommand } = await import('./start.ts');
-            const startPromise = startCommand([]);
-            await new Promise<void>((resolve) => setTimeout(resolve, 0));
-            process.emit('SIGINT');
-            try {
-                await startPromise;
-            } catch {
-                // Ignore
-            }
-        } finally {
-            stderrSpy.mockRestore();
-        }
+        // process.stderr.write is spied on by beforeEach in this describe block
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            expect.stringContaining('focus add fileread'),
+        );
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            expect.stringContaining('focus reinstall codebase'),
+        );
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            expect.stringContaining('focus doctor'),
+        );
 
-        const combined = stderrChunks.join('');
-        expect(combined).toMatch(/focus add fileread/);
-        expect(combined).toMatch(/focus reinstall codebase/);
-        expect(combined).toMatch(/focus doctor/);
+        void promise;
     });
 });
+
