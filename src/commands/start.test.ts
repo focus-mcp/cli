@@ -2077,11 +2077,8 @@ describe('startCommand', () => {
         expect(process.stderr.write).toHaveBeenCalledWith(
             expect.stringContaining('focus reinstall codebase'),
         );
-        expect(process.stderr.write).toHaveBeenCalledWith(
-            expect.stringContaining('focus doctor'),
-        );
+        expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining('focus doctor'));
 
         void promise;
     });
 });
-
