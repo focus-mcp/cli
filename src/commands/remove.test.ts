@@ -8,7 +8,7 @@ import { removeCommand } from './remove.ts';
 // ---------- helpers ----------
 
 const DEFAULT_URL =
-    'https://raw.githubusercontent.com/focus-mcp/marketplace/develop/publish/catalog.json';
+    'https://focus-mcp.github.io/marketplace/catalog.json';
 
 function makeInstallerIO(overrides: Partial<InstallerIO> = {}): InstallerIO {
     return {
