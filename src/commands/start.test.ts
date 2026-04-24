@@ -2047,3 +2047,49 @@ describe('startCommand', () => {
         expect(() => minimalLogger.error()).not.toThrow();
     });
 });
+
+// ---------- enrichStartError (Missing dependency actionable message) ----------
+
+describe('enrichStartError — Missing dependency', () => {
+    it('enriches a Missing dependency error with actionable suggestions via loadBricks failure', async () => {
+        // Exercise enrichStartError indirectly: load with a Missing dependency failure
+        mockLoadBricks.mockResolvedValueOnce({
+            bricks: [],
+            failures: [
+                {
+                    name: 'codebase',
+                    error: new Error('Missing dependency "fileread"'),
+                },
+            ],
+        });
+        mockReadFile.mockResolvedValueOnce(
+            JSON.stringify({ bricks: { codebase: { version: '1.0.0', enabled: true } } }),
+        );
+
+        const stderrChunks: string[] = [];
+        const origStderrWrite = process.stderr.write.bind(process.stderr);
+        const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+            stderrChunks.push(String(chunk));
+            return origStderrWrite(chunk as string);
+        });
+
+        try {
+            const { startCommand } = await import('./start.ts');
+            const startPromise = startCommand([]);
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            process.emit('SIGINT');
+            try {
+                await startPromise;
+            } catch {
+                // Ignore
+            }
+        } finally {
+            stderrSpy.mockRestore();
+        }
+
+        const combined = stderrChunks.join('');
+        expect(combined).toMatch(/focus add fileread/);
+        expect(combined).toMatch(/focus reinstall codebase/);
+        expect(combined).toMatch(/focus doctor/);
+    });
+});

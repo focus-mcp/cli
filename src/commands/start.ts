@@ -23,6 +23,24 @@ import { catalogCommand } from './catalog.ts';
 import { removeCommand } from './remove.ts';
 import { searchCommand } from './search.ts';
 
+/**
+ * Enrich a start-time error message with actionable suggestions.
+ * When the registry reports "Missing dependency X", we hint at the
+ * three most useful recovery commands.
+ */
+function enrichStartError(message: string, brickName: string): string {
+    const match = message.match(/^Missing dependency "([^"]+)"/);
+    if (match === null) return message;
+    const dep = match[1] ?? '';
+    return [
+        `Missing dependency "${dep}" (required by brick "${brickName}")`,
+        'Possible fixes:',
+        `  focus add ${dep}                  # install the missing dep`,
+        `  focus reinstall ${brickName}      # if ${brickName}'s install is corrupted`,
+        '  focus doctor                 # full diagnostic',
+    ].join('\n');
+}
+
 export const minimalLogger = {
     trace() {},
     debug() {},
@@ -78,9 +96,8 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         bricks = [...result.bricks];
 
         for (const failure of result.failures) {
-            process.stderr.write(
-                `⚠ Failed to load brick "${failure.name}": ${failure.error.message}\n`,
-            );
+            const errMsg = enrichStartError(failure.error.message, failure.name);
+            process.stderr.write(`⚠ Failed to load brick "${failure.name}": ${errMsg}\n`);
         }
 
         process.stderr.write(`Loaded ${bricks.length} brick(s)\n`);
