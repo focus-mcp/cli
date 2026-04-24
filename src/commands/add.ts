@@ -2,17 +2,20 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * focus add <brick>
+ * focus add <brick> [<brick2> ...]
  *
- * Fetches catalog sources, finds the brick, plans the npm install, executes it,
- * and updates center.json + center.lock.
+ * Fetches catalog sources, finds each brick (plus transitive deps), plans the
+ * npm install for each, executes them, and updates center.json + center.lock.
  * Pure function: all I/O is injected via AddIO.
  */
 
 import {
+    type AggregatedCatalog,
     aggregateCatalogs,
+    type CenterJson,
     createDefaultStore,
     executeInstall,
+    executeRemove,
     fetchAllCatalogs,
     findBrickAcrossCatalogs,
     getEnabledSources,
@@ -20,6 +23,7 @@ import {
     parseCenterJson,
     parseCenterLock,
     planInstall,
+    planRemove,
 } from '@focus-mcp/core';
 import type { CatalogStoreIO } from '../adapters/catalog-store-adapter.ts';
 import type { FetchIO } from '../adapters/http-fetch-adapter.ts';
@@ -36,16 +40,14 @@ export interface AddCommandInput {
     readonly io: AddIO;
 }
 
-/**
- * Executes the add command. Returns a user-facing message describing what was
- * installed or a clear error message when the brick cannot be found.
- */
-export async function addCommand({ brickName, io }: AddCommandInput): Promise<string> {
-    if (brickName.trim().length === 0) {
-        throw new Error('Brick name must not be empty.');
-    }
+export interface AddManyCommandInput {
+    readonly brickNames: readonly string[];
+    readonly io: AddIO;
+}
 
-    // Load catalog sources
+// ---------- catalog loading ----------
+
+async function loadAggregatedCatalog(io: AddIO): Promise<AggregatedCatalog> {
     const rawStore = await io.store.readStore();
     let store = parseCatalogStore(rawStore);
     if (store.sources.length === 0) {
@@ -65,26 +67,178 @@ export async function addCommand({ brickName, io }: AddCommandInput): Promise<st
         );
     }
 
-    const aggregated = aggregateCatalogs(results);
+    return aggregateCatalogs(results);
+}
+
+// ---------- dependency resolution ----------
+
+/**
+ * Walk the dep graph for a single brick and return an ordered install list
+ * (deps-first). Throws on circular dependencies or missing catalog entries.
+ */
+function resolveDeps(
+    brickName: string,
+    aggregated: AggregatedCatalog,
+    centerJson: CenterJson,
+    visited: string[],
+    resolved: string[],
+    log: (msg: string) => void,
+): void {
+    if (visited.includes(brickName)) {
+        const cycle = [...visited, brickName].join(' → ');
+        throw new Error(`Circular dependency detected: ${cycle}`);
+    }
+
+    if (resolved.includes(brickName) || brickName in centerJson.bricks) return;
+
     const brick = findBrickAcrossCatalogs(aggregated, brickName);
     if (brick === undefined) {
         throw new Error(`Brick "${brickName}" not found in any catalog.`);
     }
 
-    const plan = planInstall(brick, brick.catalogUrl);
+    visited.push(brickName);
+    for (const dep of brick.dependencies) {
+        if (dep in centerJson.bricks || resolved.includes(dep)) continue;
+        log(`  Cascading dep "${dep}" from "${brickName}"`);
+        resolveDeps(dep, aggregated, centerJson, visited, resolved, log);
+    }
+    visited.pop();
 
-    // Load existing center state
+    resolved.push(brickName);
+}
+
+// ---------- rollback helpers ----------
+
+async function rollbackInstalled(installer: InstallerIO, installed: string[]): Promise<void> {
+    for (const name of [...installed].reverse()) {
+        try {
+            const rawCenter = await installer.readCenterJson();
+            const rawLock = await installer.readCenterLock();
+            const center = parseCenterJson(rawCenter);
+            const lock = parseCenterLock(rawLock);
+            const { npmPackage } = planRemove(name, center, lock);
+            await executeRemove(installer, name, npmPackage, center, lock);
+        } catch {
+            // Best-effort rollback — ignore secondary failures
+        }
+    }
+}
+
+// ---------- install loop ----------
+
+async function installSequentially(
+    installOrder: string[],
+    aggregated: AggregatedCatalog,
+    installer: InstallerIO,
+): Promise<string[]> {
+    const installed: string[] = [];
+
+    for (const name of installOrder) {
+        const brick = findBrickAcrossCatalogs(aggregated, name);
+        if (brick === undefined) throw new Error(`Brick "${name}" not found in any catalog.`);
+
+        const plan = planInstall(brick, brick.catalogUrl);
+
+        const rawCenter = await installer.readCenterJson();
+        const rawLock = await installer.readCenterLock();
+        const centerJson = parseCenterJson(rawCenter);
+        const centerLock = parseCenterLock(rawLock);
+
+        try {
+            await executeInstall(installer, plan, centerJson, centerLock);
+            installed.push(name);
+        } catch (err) {
+            if (installed.length > 0) {
+                await rollbackInstalled(installer, installed);
+            }
+            const errMsg = err instanceof Error ? err.message : String(err);
+            throw new Error(`Failed to install "${name}": ${errMsg}`);
+        }
+    }
+
+    return installed;
+}
+
+// ---------- summary helpers ----------
+
+function buildSummary(
+    installed: string[],
+    installOrder: string[],
+    aggregated: AggregatedCatalog,
+    messages: string[],
+): string {
+    if (installed.length === 0) return messages.join('\n');
+
+    if (installed.length === 1) {
+        const name = installOrder[0] as string;
+        const brick = findBrickAcrossCatalogs(aggregated, name);
+        const version = brick?.version ?? 'unknown';
+        const catalogUrl = brick?.catalogUrl ?? '';
+        messages.push(`Installed ${name}@${version} from ${catalogUrl}`);
+    } else {
+        const labelled = installed.map((n) => {
+            const b = findBrickAcrossCatalogs(aggregated, n);
+            return `${n}@${b?.version ?? 'unknown'}`;
+        });
+        messages.push(`Installed ${installed.length} bricks: ${labelled.join(', ')}`);
+    }
+
+    return messages.join('\n');
+}
+
+// ---------- public API ----------
+
+/**
+ * Executes the add command. Returns a user-facing message describing what was
+ * installed or a clear error message when the brick cannot be found.
+ */
+export async function addCommand({ brickName, io }: AddCommandInput): Promise<string> {
+    if (brickName.trim().length === 0) {
+        throw new Error('Brick name must not be empty.');
+    }
+    return addManyCommand({ brickNames: [brickName], io });
+}
+
+/**
+ * Installs multiple bricks (and their transitive dependencies) in one run.
+ *
+ * - Skips bricks already present in center.json.
+ * - Detects circular dependencies in the dep graph.
+ * - Aborts and restores state on any install failure.
+ */
+export async function addManyCommand({ brickNames, io }: AddManyCommandInput): Promise<string> {
+    if (brickNames.length === 0) throw new Error('At least one brick name is required.');
+    for (const name of brickNames) {
+        if (name.trim().length === 0) throw new Error('Brick name must not be empty.');
+    }
+
+    const aggregated = await loadAggregatedCatalog(io);
+
     const rawCenter = await io.installer.readCenterJson();
     const rawLock = await io.installer.readCenterLock();
     const centerJson = parseCenterJson(rawCenter);
-    const centerLock = parseCenterLock(rawLock);
+    // rawLock is read here but only needed for the installer contract; re-read inside loop
+    void rawLock;
 
-    // Check already installed
-    if (brickName in centerJson.bricks) {
-        return `Brick "${brickName}" is already installed (version ${centerJson.bricks[brickName]?.version ?? 'unknown'}). Use \`focus update\` to upgrade.`;
+    const messages: string[] = [];
+    const installOrder: string[] = [];
+
+    for (const brickName of brickNames) {
+        if (brickName in centerJson.bricks) {
+            const ver = centerJson.bricks[brickName]?.version ?? 'unknown';
+            messages.push(
+                `Brick "${brickName}" is already installed (version ${ver}). Use \`focus update\` to upgrade.`,
+            );
+            continue;
+        }
+        resolveDeps(brickName, aggregated, centerJson, [], installOrder, (msg) => {
+            messages.push(msg);
+        });
     }
 
-    await executeInstall(io.installer, plan, centerJson, centerLock);
+    if (installOrder.length === 0) return messages.join('\n');
 
-    return `Installed ${brickName}@${plan.version} from ${plan.catalogUrl}`;
+    const installed = await installSequentially(installOrder, aggregated, io.installer);
+
+    return buildSummary(installed, installOrder, aggregated, messages);
 }

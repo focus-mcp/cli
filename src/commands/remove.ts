@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * focus remove <brick>
+ * focus remove <brick> [<brick2> ...]
  *
- * Plans removal by looking up the brick in center.json + center.lock,
+ * Plans removal by looking up each brick in center.json + center.lock,
  * executes the npm uninstall, and updates both state files.
  * Pure function: all I/O is injected via RemoveIO.
  */
@@ -21,6 +21,11 @@ export interface RemoveCommandInput {
     readonly io: RemoveIO;
 }
 
+export interface RemoveManyCommandInput {
+    readonly brickNames: readonly string[];
+    readonly io: RemoveIO;
+}
+
 /**
  * Executes the remove command. Returns a user-facing success message or
  * throws with a clear error when the brick is not installed.
@@ -29,15 +34,57 @@ export async function removeCommand({ brickName, io }: RemoveCommandInput): Prom
     if (brickName.trim().length === 0) {
         throw new Error('Brick name must not be empty.');
     }
+    return removeManyCommand({ brickNames: [brickName], io });
+}
 
-    const rawCenter = await io.installer.readCenterJson();
-    const rawLock = await io.installer.readCenterLock();
-    const centerJson = parseCenterJson(rawCenter);
-    const centerLock = parseCenterLock(rawLock);
+/**
+ * Removes multiple bricks sequentially. Returns a summary message.
+ * Each brick is removed independently; if one fails the rest are still attempted.
+ */
+export async function removeManyCommand({
+    brickNames,
+    io,
+}: RemoveManyCommandInput): Promise<string> {
+    if (brickNames.length === 0) {
+        throw new Error('At least one brick name is required.');
+    }
 
-    const { npmPackage } = planRemove(brickName, centerJson, centerLock);
+    for (const name of brickNames) {
+        if (name.trim().length === 0) {
+            throw new Error('Brick name must not be empty.');
+        }
+    }
 
-    await executeRemove(io.installer, brickName, npmPackage, centerJson, centerLock);
+    const removed: string[] = [];
+    const errors: string[] = [];
 
-    return `Removed ${brickName} (package: ${npmPackage})`;
+    for (const brickName of brickNames) {
+        const rawCenter = await io.installer.readCenterJson();
+        const rawLock = await io.installer.readCenterLock();
+        const centerJson = parseCenterJson(rawCenter);
+        const centerLock = parseCenterLock(rawLock);
+
+        try {
+            const { npmPackage } = planRemove(brickName, centerJson, centerLock);
+            await executeRemove(io.installer, brickName, npmPackage, centerJson, centerLock);
+            removed.push(brickName);
+        } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            errors.push(`"${brickName}": ${errMsg}`);
+        }
+    }
+
+    const lines: string[] = [];
+    if (removed.length > 0) {
+        lines.push(`Removed ${removed.length} brick(s): ${removed.join(', ')}`);
+    }
+    if (errors.length > 0) {
+        lines.push(`Errors:\n${errors.map((e) => `  ${e}`).join('\n')}`);
+    }
+
+    if (errors.length > 0 && removed.length === 0) {
+        throw new Error(lines.join('\n'));
+    }
+
+    return lines.join('\n');
 }
