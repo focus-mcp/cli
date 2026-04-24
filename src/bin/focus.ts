@@ -28,6 +28,7 @@ import { listCommand } from '../commands/list.ts';
 import { removeManyCommand } from '../commands/remove.ts';
 import { searchCommand } from '../commands/search.ts';
 import { startCommand } from '../commands/start.ts';
+import { upgradeCommand } from '../commands/upgrade.ts';
 
 const HELP = `focus — FocusMCP CLI
 
@@ -39,6 +40,7 @@ Commands:
   info <name>             Show details of a single brick
   add <name> [name2 ...]  Install one or more bricks (deps auto-installed)
   remove <name> [...]     Uninstall one or more bricks
+  upgrade [name] [--all]  Re-install brick(s) at the latest catalog version
   search [query]          Search bricks in the catalog
   catalog                 Manage catalog sources (add|remove|list)
   doctor [--json]         Audit local state and report actionable issues
@@ -167,6 +169,35 @@ async function runCatalog(rest: string[]): Promise<number> {
     return 0;
 }
 
+async function runUpgrade(rest: string[]): Promise<number> {
+    const { values: upgradeValues, positionals: upgradePosArgs } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        strict: false,
+        options: {
+            all: { type: 'boolean' },
+            check: { type: 'boolean' },
+        },
+    });
+    const brickName = upgradePosArgs[0];
+    const all = upgradeValues['all'] === true || brickName === undefined;
+    const check = upgradeValues['check'] === true;
+
+    const io = {
+        fetch: new HttpFetchAdapter(),
+        store: new FilesystemCatalogStoreAdapter(),
+        installer: new NpmInstallerAdapter(),
+    };
+    const result = await upgradeCommand({
+        ...(brickName !== undefined ? { brickName } : {}),
+        all,
+        check,
+        io,
+    });
+    process.stdout.write(`${result.output}\n`);
+    return result.failed > 0 ? 1 : 0;
+}
+
 async function runDoctor(rest: string[]): Promise<number> {
     const { values: doctorValues } = parseArgs({
         args: rest,
@@ -259,6 +290,8 @@ async function main(argv: string[]): Promise<number> {
             return runAdd(rest);
         case 'remove':
             return runRemove(rest);
+        case 'upgrade':
+            return runUpgrade(rest);
         case 'search':
             return runSearch(rest);
         case 'catalog':
