@@ -156,4 +156,12 @@ export class NpmInstallerAdapter implements InstallerIO {
             'utf-8',
         );
     }
+
+    getBricksDir(): string {
+        return this.#bricksDir;
+    }
+
+    getFocusDir(): string {
+        return FOCUS_DIR;
+    }
 }
