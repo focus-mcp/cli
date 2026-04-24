@@ -335,3 +335,169 @@ describe('addManyCommand', () => {
         );
     });
 });
+
+// ---------- addManyCommand --force flag ----------
+
+describe('addManyCommand --force', () => {
+    it('re-installs a brick already in center.json when force=true', async () => {
+        const installer = makeInstallerIO({
+            readCenterJson: vi
+                .fn()
+                // First call: already installed; subsequent calls: after removal
+                .mockResolvedValueOnce({ bricks: { echo: { version: '1.0.0', enabled: true } } })
+                .mockResolvedValue({ bricks: {} }),
+            readCenterLock: vi
+                .fn()
+                .mockResolvedValueOnce({
+                    bricks: {
+                        echo: {
+                            version: '1.0.0',
+                            catalogUrl: DEFAULT_URL,
+                            npmPackage: '@focus-mcp/brick-echo',
+                            installedAt: '2026-01-01T00:00:00Z',
+                        },
+                    },
+                })
+                .mockResolvedValue({ bricks: {} }),
+        });
+
+        const io = {
+            fetch: makeFetchIO(),
+            store: makeStoreIO(),
+            installer,
+        };
+
+        const result = await addManyCommand({ brickNames: ['echo'], io, force: true });
+
+        // npmUninstall called during force-remove, then npmInstall for re-install
+        expect(installer.npmInstall).toHaveBeenCalledOnce();
+        expect(result).toMatch(/installed echo@/i);
+    });
+
+    it('skips the already-installed warning when force=true (no "already installed" message)', async () => {
+        const installer = makeInstallerIO({
+            readCenterJson: vi
+                .fn()
+                .mockResolvedValueOnce({ bricks: { echo: { version: '1.0.0', enabled: true } } })
+                .mockResolvedValue({ bricks: {} }),
+            readCenterLock: vi
+                .fn()
+                .mockResolvedValueOnce({
+                    bricks: {
+                        echo: {
+                            version: '1.0.0',
+                            catalogUrl: DEFAULT_URL,
+                            npmPackage: '@focus-mcp/brick-echo',
+                            installedAt: '2026-01-01T00:00:00Z',
+                        },
+                    },
+                })
+                .mockResolvedValue({ bricks: {} }),
+        });
+
+        const io = { fetch: makeFetchIO(), store: makeStoreIO(), installer };
+        const result = await addManyCommand({ brickNames: ['echo'], io, force: true });
+
+        expect(result).not.toMatch(/already installed/i);
+    });
+
+    it('calls rmDir when a getBricksDir and rmDir are provided on force', async () => {
+        const installer = makeInstallerIO({
+            readCenterJson: vi
+                .fn()
+                .mockResolvedValueOnce({ bricks: { echo: { version: '1.0.0', enabled: true } } })
+                .mockResolvedValue({ bricks: {} }),
+            readCenterLock: vi
+                .fn()
+                .mockResolvedValueOnce({
+                    bricks: {
+                        echo: {
+                            version: '1.0.0',
+                            catalogUrl: DEFAULT_URL,
+                            npmPackage: '@focus-mcp/brick-echo',
+                            installedAt: '2026-01-01T00:00:00Z',
+                        },
+                    },
+                })
+                .mockResolvedValue({ bricks: {} }),
+        });
+
+        const rmDir = vi.fn().mockResolvedValue(undefined);
+        const io = {
+            fetch: makeFetchIO(),
+            store: makeStoreIO(),
+            installer,
+            getBricksDir: () => '/home/user/.focus/bricks',
+            rmDir,
+        };
+
+        await addManyCommand({ brickNames: ['echo'], io, force: true });
+
+        expect(rmDir).toHaveBeenCalledWith(
+            '/home/user/.focus/bricks/node_modules/@focus-mcp/brick-echo',
+        );
+    });
+});
+
+// ---------- bundle bricks (tools=0, deps>0) cascade ----------
+
+describe('addManyCommand — bundle brick cascade', () => {
+    it('focus add codebase installs codebase + all declared deps', async () => {
+        // Simulates a bundle brick: tools=[], deps=[dep1..dep6]
+        const deps = ['dep1', 'dep2', 'dep3', 'dep4', 'dep5', 'dep6'];
+        const depBricks = deps.map((d) => validBrick({ name: d, tools: [], dependencies: [] }));
+        const codebase = validBrick({ name: 'codebase', tools: [], dependencies: deps });
+
+        const installer = makeInstallerIO();
+        const io = {
+            fetch: makeFetchIO(() => Promise.resolve(validCatalog([codebase, ...depBricks]))),
+            store: makeStoreIO(),
+            installer,
+        };
+
+        const result = await addManyCommand({ brickNames: ['codebase'], io });
+
+        // codebase + 6 deps = 7 installs
+        expect(installer.npmInstall).toHaveBeenCalledTimes(7);
+        expect(result).toMatch(/installed 7 bricks/i);
+        for (const d of deps) {
+            expect(result).toMatch(new RegExp(`Cascading dep "${d}" from "codebase"`, 'i'));
+        }
+    });
+
+    it('bundle brick does not install deps already in center.json', async () => {
+        const deps = ['dep1', 'dep2'];
+        const depBricks = deps.map((d) => validBrick({ name: d, tools: [], dependencies: [] }));
+        const bundle = validBrick({ name: 'aiteam', tools: [], dependencies: deps });
+
+        // dep1 already installed
+        const installer = makeInstallerIO({
+            readCenterJson: vi
+                .fn()
+                .mockResolvedValue({ bricks: { dep1: { version: '1.0.0', enabled: true } } }),
+            readCenterLock: vi.fn().mockResolvedValue({
+                bricks: {
+                    dep1: {
+                        version: '1.0.0',
+                        catalogUrl: DEFAULT_URL,
+                        npmPackage: '@focus-mcp/brick-dep1',
+                        installedAt: '2026-01-01T00:00:00Z',
+                    },
+                },
+            }),
+        });
+
+        const io = {
+            fetch: makeFetchIO(() => Promise.resolve(validCatalog([bundle, ...depBricks]))),
+            store: makeStoreIO(),
+            installer,
+        };
+
+        const result = await addManyCommand({ brickNames: ['aiteam'], io });
+
+        // aiteam + dep2 only (dep1 already present)
+        expect(installer.npmInstall).toHaveBeenCalledTimes(2);
+        expect(result).toMatch(/installed 2 bricks/i);
+        expect(result).not.toMatch(/cascading dep "dep1"/i);
+    });
+});
