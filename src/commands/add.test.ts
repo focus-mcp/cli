@@ -18,8 +18,7 @@ import { addCommand } from './add.ts';
 
 // ---------- helpers ----------
 
-const DEFAULT_URL =
-    'https://focus-mcp.github.io/marketplace/catalog.json';
+const DEFAULT_URL = 'https://focus-mcp.github.io/marketplace/catalog.json';
 
 function makeFetchIO(fetchJsonImpl?: () => Promise<unknown>): FetchIO {
     return {

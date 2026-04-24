@@ -34,7 +34,7 @@ function assertWithinBricksDir(resolvedPath: string, bricksDir: string): void {
     } catch {
         realBricksDir = bricksDir;
     }
-    if (!resolvedPath.startsWith(realBricksDir + '/') && resolvedPath !== realBricksDir) {
+    if (!resolvedPath.startsWith(`${realBricksDir}/`) && resolvedPath !== realBricksDir) {
         throw new Error(`Resolved path "${resolvedPath}" escapes bricksDir "${realBricksDir}"`);
     }
 }
@@ -59,7 +59,7 @@ export class FilesystemBrickSource implements BrickSource {
         // Use Node's module resolution so both layouts work:
         //   flat:        <bricksDir>/<name>/mcp-brick.json
         //   npm-nested:  <bricksDir>/node_modules/@focus-mcp/brick-<name>/mcp-brick.json
-        const require = createRequire(pathToFileURL(this.#bricksDir + '/').href);
+        const require = createRequire(pathToFileURL(`${this.#bricksDir}/`).href);
         let manifestPath: string;
         try {
             // Preferred: package exports ./mcp-brick.json explicitly
@@ -101,7 +101,7 @@ export class FilesystemBrickSource implements BrickSource {
         const brickName = safeBrickName(name);
         // Use Node's module resolution: honours package.json exports/main for both
         // flat and npm-nested layouts.
-        const require = createRequire(pathToFileURL(this.#bricksDir + '/').href);
+        const require = createRequire(pathToFileURL(`${this.#bricksDir}/`).href);
         const entry = require.resolve(`@focus-mcp/brick-${brickName}`);
         assertWithinBricksDir(entry, this.#bricksDir);
         const cacheBuster = `?t=${Date.now()}`;
