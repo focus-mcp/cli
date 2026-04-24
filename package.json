@@ -1,6 +1,6 @@
 {
     "name": "@focus-mcp/cli",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "private": false,
     "description": "Focus your AI agents on what matters. 68+ bricks, 1 MCP server, modular context — from 200k to 2k tokens. Works with Claude Code, Cursor, Codex.",
     "license": "MIT",
