@@ -72,18 +72,41 @@ describe('parseCenterJson', () => {
 });
 
 describe('parseCenterLock', () => {
-    it('parses an empty lock', () => {
+    it('parses an empty flat lock', () => {
         expect(parseCenterLock({})).toEqual({});
     });
 
-    it('parses a minimal entry', () => {
+    it('parses an empty wrapper-format lock', () => {
+        expect(parseCenterLock({ bricks: {} })).toEqual({});
+    });
+
+    it('parses a minimal entry (flat format)', () => {
         const result = parseCenterLock({
             'official/echo': { version: '1.0.0' },
         });
         expect(result['official/echo']?.version).toBe('1.0.0');
     });
 
-    it('parses a rich entry', () => {
+    it('parses a minimal entry (wrapper format written by focus add)', () => {
+        const result = parseCenterLock({
+            bricks: {
+                'official/echo': { version: '1.0.0' },
+            },
+        });
+        expect(result['official/echo']?.version).toBe('1.0.0');
+    });
+
+    it('parses a wrapper-format lock with version header (written by adapter)', () => {
+        const result = parseCenterLock({
+            version: '1',
+            bricks: {
+                shell: { version: '1.2.0' },
+            },
+        });
+        expect(result['shell']?.version).toBe('1.2.0');
+    });
+
+    it('parses a rich entry (flat format)', () => {
         const result = parseCenterLock({
             'official/echo': {
                 version: '1.0.0',
@@ -108,9 +131,36 @@ describe('parseCenterLock', () => {
         expect(() => parseCenterLock({ 'official/echo': 'bad' })).toThrow(/must be an object/i);
     });
 
+    it('rejects a non-object entry in wrapper format', () => {
+        expect(() => parseCenterLock({ bricks: { 'official/echo': 'bad' } })).toThrow(
+            /must be an object/i,
+        );
+    });
+
     it('rejects an entry without a resolved version', () => {
         expect(() => parseCenterLock({ 'official/echo': { integrity: 'sha256-x' } })).toThrow(
             /version/i,
         );
+    });
+});
+
+describe('parseCenterJson schema version', () => {
+    it('accepts a center.json with optional version field', () => {
+        const result = parseCenterJson({
+            version: '1',
+            bricks: {
+                'official/echo': { version: '^1.0.0', enabled: true },
+            },
+        });
+        expect(result.bricks['official/echo']?.version).toBe('^1.0.0');
+    });
+
+    it('accepts a center.json without version field (backward compat)', () => {
+        const result = parseCenterJson({
+            bricks: {
+                'official/echo': { version: '^1.0.0', enabled: true },
+            },
+        });
+        expect(result.bricks['official/echo']?.version).toBe('^1.0.0');
     });
 });
