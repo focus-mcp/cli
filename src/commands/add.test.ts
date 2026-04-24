@@ -15,7 +15,7 @@ vi.mock('@focus-mcp/core', async (importOriginal) => {
     return { ...real };
 });
 
-import { addCommand } from './add.ts';
+import { addCommand, addManyCommand } from './add.ts';
 
 // ---------- helpers ----------
 
@@ -84,7 +84,7 @@ function validBrick(overrides: Partial<Record<string, unknown>> = {}): Record<st
     };
 }
 
-// ---------- tests ----------
+// ---------- addCommand (single-brick, backward compat) ----------
 
 describe('addCommand', () => {
     it('throws when brick name is empty', async () => {
@@ -211,5 +211,127 @@ describe('addCommand', () => {
         expect(result).toMatch(/unknown/);
 
         vi.restoreAllMocks();
+    });
+});
+
+// ---------- addManyCommand (bulk + dep resolution) ----------
+
+describe('addManyCommand', () => {
+    it('installs all three bricks: focus add a b c', async () => {
+        const brickA = validBrick({ name: 'batch', dependencies: [] });
+        const brickB = validBrick({ name: 'format', dependencies: [] });
+        const brickC = validBrick({ name: 'filewrite', dependencies: [] });
+
+        const installer = makeInstallerIO();
+        const io = {
+            fetch: makeFetchIO(() => Promise.resolve(validCatalog([brickA, brickB, brickC]))),
+            store: makeStoreIO(),
+            installer,
+        };
+
+        const result = await addManyCommand({ brickNames: ['batch', 'format', 'filewrite'], io });
+
+        expect(installer.npmInstall).toHaveBeenCalledTimes(3);
+        expect(result).toMatch(/installed 3 bricks/i);
+        expect(result).toMatch(/batch@/i);
+        expect(result).toMatch(/format@/i);
+        expect(result).toMatch(/filewrite@/i);
+    });
+
+    it('auto-installs deps: focus add a where a.deps = [b, c]', async () => {
+        const brickB = validBrick({ name: 'b', dependencies: [] });
+        const brickC = validBrick({ name: 'c', dependencies: [] });
+        const brickA = validBrick({ name: 'a', dependencies: ['b', 'c'] });
+
+        const installer = makeInstallerIO();
+        const io = {
+            fetch: makeFetchIO(() => Promise.resolve(validCatalog([brickA, brickB, brickC]))),
+            store: makeStoreIO(),
+            installer,
+        };
+
+        const result = await addManyCommand({ brickNames: ['a'], io });
+
+        // a + b + c = 3 installs
+        expect(installer.npmInstall).toHaveBeenCalledTimes(3);
+        expect(result).toMatch(/installed 3 bricks/i);
+        expect(result).toMatch(/Cascading dep "b" from "a"/);
+        expect(result).toMatch(/Cascading dep "c" from "a"/);
+    });
+
+    it('skips already-installed dep: focus add a where a.deps=[b] and b is installed', async () => {
+        const brickB = validBrick({ name: 'b', dependencies: [] });
+        const brickA = validBrick({ name: 'a', dependencies: ['b'] });
+
+        // b is already installed
+        const installer = makeInstallerIO({
+            readCenterJson: vi.fn().mockResolvedValue({
+                bricks: { b: { version: '1.0.0', enabled: true } },
+            }),
+            readCenterLock: vi.fn().mockResolvedValue({
+                bricks: {
+                    b: {
+                        version: '1.0.0',
+                        catalogUrl: DEFAULT_URL,
+                        npmPackage: '@focus-mcp/brick-b',
+                        installedAt: '2026-01-01T00:00:00Z',
+                    },
+                },
+            }),
+        });
+        const io = {
+            fetch: makeFetchIO(() => Promise.resolve(validCatalog([brickA, brickB]))),
+            store: makeStoreIO(),
+            installer,
+        };
+
+        const result = await addManyCommand({ brickNames: ['a'], io });
+
+        // Only a should be installed; b is already present
+        expect(installer.npmInstall).toHaveBeenCalledTimes(1);
+        expect(result).toMatch(/installed a@/i);
+        // No cascade message for b
+        expect(result).not.toMatch(/cascading dep "b"/i);
+    });
+
+    it('throws clean error when a dep is missing from catalog', async () => {
+        const brickA = validBrick({ name: 'a', dependencies: ['missing-dep'] });
+
+        const installer = makeInstallerIO();
+        const io = {
+            fetch: makeFetchIO(() => Promise.resolve(validCatalog([brickA]))),
+            store: makeStoreIO(),
+            installer,
+        };
+
+        await expect(addManyCommand({ brickNames: ['a'], io })).rejects.toThrow(
+            /not found in any catalog/i,
+        );
+        // Nothing should have been installed
+        expect(installer.npmInstall).not.toHaveBeenCalled();
+    });
+
+    it('detects circular dependency and throws with cycle path', async () => {
+        const brickA = validBrick({ name: 'a', dependencies: ['b'] });
+        const brickB = validBrick({ name: 'b', dependencies: ['a'] });
+
+        const installer = makeInstallerIO();
+        const io = {
+            fetch: makeFetchIO(() => Promise.resolve(validCatalog([brickA, brickB]))),
+            store: makeStoreIO(),
+            installer,
+        };
+
+        await expect(addManyCommand({ brickNames: ['a'], io })).rejects.toThrow(
+            /circular dependency/i,
+        );
+        expect(installer.npmInstall).not.toHaveBeenCalled();
+    });
+
+    it('throws when brickNames is empty', async () => {
+        const io = { fetch: makeFetchIO(), store: makeStoreIO(), installer: makeInstallerIO() };
+        await expect(addManyCommand({ brickNames: [], io })).rejects.toThrow(
+            /at least one brick name/i,
+        );
     });
 });
