@@ -1,5 +1,11 @@
 # @focus-mcp/cli
 
+## 1.6.0
+
+### Minor Changes
+
+- Publish `focus doctor` command (merged in 1.5.x without a changeset/bump). Also ships bulk-args + auto-install-deps that were in 1.5.0.
+
 ## 1.5.0
 
 ### Minor Changes
