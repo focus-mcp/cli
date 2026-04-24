@@ -1,5 +1,14 @@
 # @focus-mcp/cli
 
+## 1.5.0
+
+### Minor Changes
+
+- feat(cli): bulk install/remove + automatic dependency resolution.
+  - `focus add X Y Z` now installs multiple bricks in one command.
+  - `focus remove X Y Z` likewise.
+  - `focus add X` auto-installs deps declared in X's mcp-brick.json (cascades transitively, skips already-installed, detects circularity).
+
 ## 1.4.0
 
 ### Minor Changes

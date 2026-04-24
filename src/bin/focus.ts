@@ -18,12 +18,12 @@ import { FilesystemCatalogStoreAdapter } from '../adapters/catalog-store-adapter
 import { HttpFetchAdapter } from '../adapters/http-fetch-adapter.ts';
 import { NpmInstallerAdapter } from '../adapters/npm-installer-adapter.ts';
 import { parseCenterJson, parseCenterLock } from '../center.ts';
-import { addCommand } from '../commands/add.ts';
+import { addManyCommand } from '../commands/add.ts';
 import { browseCommand } from '../commands/browse.ts';
 import { catalogCommand } from '../commands/catalog.ts';
 import { infoCommand } from '../commands/info.ts';
 import { listCommand } from '../commands/list.ts';
-import { removeCommand } from '../commands/remove.ts';
+import { removeManyCommand } from '../commands/remove.ts';
 import { searchCommand } from '../commands/search.ts';
 import { startCommand } from '../commands/start.ts';
 
@@ -33,15 +33,15 @@ Usage:
   focus <command> [options]
 
 Commands:
-  list             List installed bricks (from ~/.focus/center.json)
-  info <name>      Show details of a single brick
-  add <name>       Install a brick from the catalog
-  remove <name>    Uninstall a brick
-  search [query]   Search bricks in the catalog
-  catalog          Manage catalog sources (add|remove|list)
-  browse           Interactive TUI to browse catalogs and bricks
-  start            Launch FocusMCP as a stdio MCP server (AI clients attach here)
-  help             Print this help
+  list                    List installed bricks (from ~/.focus/center.json)
+  info <name>             Show details of a single brick
+  add <name> [name2 ...]  Install one or more bricks (deps auto-installed)
+  remove <name> [...]     Uninstall one or more bricks
+  search [query]          Search bricks in the catalog
+  catalog                 Manage catalog sources (add|remove|list)
+  browse                  Interactive TUI to browse catalogs and bricks
+  start                   Launch FocusMCP as a stdio MCP server (AI clients attach here)
+  help                    Print this help
 
 Options:
   -h, --help       Print help
@@ -80,9 +80,10 @@ async function runInfo(rest: string[]): Promise<number> {
 }
 
 async function runAdd(rest: string[]): Promise<number> {
-    const brickName = rest[0];
-    if (!brickName) {
-        process.stderr.write('error: `focus add <name>` requires a brick name.\n');
+    if (rest.length === 0) {
+        process.stderr.write(
+            'error: `focus add <name> [name2 ...]` requires at least one brick name.\n',
+        );
         return 1;
     }
     const io = {
@@ -90,19 +91,20 @@ async function runAdd(rest: string[]): Promise<number> {
         store: new FilesystemCatalogStoreAdapter(),
         installer: new NpmInstallerAdapter(),
     };
-    const output = await addCommand({ brickName, io });
+    const output = await addManyCommand({ brickNames: rest, io });
     process.stdout.write(`${output}\n`);
     return 0;
 }
 
 async function runRemove(rest: string[]): Promise<number> {
-    const brickName = rest[0];
-    if (!brickName) {
-        process.stderr.write('error: `focus remove <name>` requires a brick name.\n');
+    if (rest.length === 0) {
+        process.stderr.write(
+            'error: `focus remove <name> [name2 ...]` requires at least one brick name.\n',
+        );
         return 1;
     }
-    const output = await removeCommand({
-        brickName,
+    const output = await removeManyCommand({
+        brickNames: rest,
         io: { installer: new NpmInstallerAdapter() },
     });
     process.stdout.write(`${output}\n`);
