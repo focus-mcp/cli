@@ -2046,4 +2046,39 @@ describe('startCommand', () => {
         expect(() => minimalLogger.warn()).not.toThrow();
         expect(() => minimalLogger.error()).not.toThrow();
     });
+
+    // ---------- enrichStartError — Missing dependency actionable message ----------
+
+    it('enriches a Missing dependency error with actionable focus commands', async () => {
+        // Simulate a brick that fails to load with a Missing dependency error.
+        // enrichStartError intercepts the message and adds recovery hints.
+        mockLoadBricks.mockResolvedValueOnce({
+            bricks: [],
+            failures: [
+                {
+                    name: 'codebase',
+                    error: new Error('Missing dependency "fileread"'),
+                },
+            ],
+        });
+        mockReadFile.mockResolvedValueOnce(
+            JSON.stringify({ bricks: { codebase: { version: '1.0.0', enabled: true } } }),
+        );
+
+        const { startCommand } = await import('./start.ts');
+        // stdio mode blocks forever — run without await
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        // process.stderr.write is spied on by beforeEach in this describe block
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            expect.stringContaining('focus add fileread'),
+        );
+        expect(process.stderr.write).toHaveBeenCalledWith(
+            expect.stringContaining('focus reinstall codebase'),
+        );
+        expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining('focus doctor'));
+
+        void promise;
+    });
 });
