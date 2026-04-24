@@ -146,7 +146,7 @@ describe('FilesystemBrickSource', () => {
         // First resolve call (subpath) throws ERR_PACKAGE_PATH_NOT_EXPORTED
         // Second resolve call (main entry) returns a src path
         let resolveCallCount = 0;
-        mockResolve.mockImplementation((specifier: string) => {
+        mockResolve.mockImplementation((_specifier: string) => {
             resolveCallCount++;
             if (resolveCallCount === 1) {
                 // subpath not exported

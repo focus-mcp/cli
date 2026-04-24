@@ -1,14 +1,14 @@
 // SPDX-FileCopyrightText: 2026 FocusMCP contributors
 // SPDX-License-Identifier: MIT
 
+import { DEFAULT_CATALOG_URL } from '@focus-mcp/core';
 import { describe, expect, it, vi } from 'vitest';
 import type { InstallerIO } from '../adapters/npm-installer-adapter.ts';
 import { removeCommand } from './remove.ts';
 
 // ---------- helpers ----------
 
-const DEFAULT_URL =
-    'https://raw.githubusercontent.com/focus-mcp/marketplace/develop/publish/catalog.json';
+const DEFAULT_URL = DEFAULT_CATALOG_URL;
 
 function makeInstallerIO(overrides: Partial<InstallerIO> = {}): InstallerIO {
     return {
