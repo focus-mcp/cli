@@ -1,5 +1,16 @@
 # @focus-mcp/cli
 
+## 1.8.0
+
+### Minor Changes
+
+- DX improvements:
+  - `focus add --force`/`-f` overwrites existing/corrupted installs
+  - `focus reinstall <X> [Y Z ...]` — fast recovery from corrupted state
+  - Bundle bricks (tools=0, deps>0) now cascade-install their deps (verifies 1.5.0 coverage)
+  - `focus doctor --fix` auto-remediates corrupted installs and missing deps
+  - `focus start` "Missing dependency" error now suggests actionable commands
+
 ## 1.7.0
 
 ### Minor Changes

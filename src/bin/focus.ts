@@ -13,6 +13,7 @@
  * `biome.json` allows `console.*` under `src/bin/` and `src/commands/`.
  */
 
+import { rm } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import { FilesystemCatalogStoreAdapter } from '../adapters/catalog-store-adapter.ts';
 import { HttpFetchAdapter } from '../adapters/http-fetch-adapter.ts';
@@ -25,6 +26,7 @@ import type { DoctorIO } from '../commands/doctor.ts';
 import { doctorCommand, formatDoctorOutput } from '../commands/doctor.ts';
 import { infoCommand } from '../commands/info.ts';
 import { listCommand } from '../commands/list.ts';
+import { reinstallCommand } from '../commands/reinstall.ts';
 import { removeManyCommand } from '../commands/remove.ts';
 import { searchCommand } from '../commands/search.ts';
 import { startCommand } from '../commands/start.ts';
@@ -36,17 +38,20 @@ Usage:
   focus <command> [options]
 
 Commands:
-  list                    List installed bricks (from ~/.focus/center.json)
-  info <name>             Show details of a single brick
-  add <name> [name2 ...]  Install one or more bricks (deps auto-installed)
-  remove <name> [...]     Uninstall one or more bricks
-  upgrade [name] [--all]  Re-install brick(s) at the latest catalog version
-  search [query]          Search bricks in the catalog
-  catalog                 Manage catalog sources (add|remove|list)
-  doctor [--json]         Audit local state and report actionable issues
-  browse                  Interactive TUI to browse catalogs and bricks
-  start                   Launch FocusMCP as a stdio MCP server (AI clients attach here)
-  help                    Print this help
+  list                         List installed bricks (from ~/.focus/center.json)
+  info <name>                  Show details of a single brick
+  add [-f] <name> [name2 ...]  Install one or more bricks (deps auto-installed)
+                               -f / --force  re-install even if already present or corrupted
+  remove <name> [...]          Uninstall one or more bricks
+  reinstall <name> [...]       Force-reinstall (preserves enabled state; use after doctor)
+  upgrade [name] [--all]       Re-install brick(s) at the latest catalog version
+  search [query]               Search bricks in the catalog
+  catalog                      Manage catalog sources (add|remove|list)
+  doctor [--json] [--fix]      Audit local state and report actionable issues
+                               --fix  auto-remediate corrupted installs and missing deps
+  browse                       Interactive TUI to browse catalogs and bricks
+  start                        Launch FocusMCP as a stdio MCP server (AI clients attach here)
+  help                         Print this help
 
 Options:
   -h, --help       Print help
@@ -85,18 +90,33 @@ async function runInfo(rest: string[]): Promise<number> {
 }
 
 async function runAdd(rest: string[]): Promise<number> {
-    if (rest.length === 0) {
+    const { values: addValues, positionals: addPosArgs } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        strict: false,
+        options: { force: { type: 'boolean', short: 'f' } },
+    });
+    const force = addValues['force'] === true;
+    const brickNames = addPosArgs;
+
+    if (brickNames.length === 0) {
         process.stderr.write(
-            'error: `focus add <name> [name2 ...]` requires at least one brick name.\n',
+            'error: `focus add [-f] <name> [name2 ...]` requires at least one brick name.\n',
         );
         return 1;
     }
+
+    const installer = new NpmInstallerAdapter();
     const io = {
         fetch: new HttpFetchAdapter(),
         store: new FilesystemCatalogStoreAdapter(),
-        installer: new NpmInstallerAdapter(),
+        installer,
+        getBricksDir: () => installer.getBricksDir(),
+        rmDir: async (path: string) => {
+            await rm(path, { recursive: true, force: true });
+        },
     };
-    const output = await addManyCommand({ brickNames: rest, io });
+    const output = await addManyCommand({ brickNames, io, force });
     process.stdout.write(`${output}\n`);
     return 0;
 }
@@ -114,6 +134,28 @@ async function runRemove(rest: string[]): Promise<number> {
     });
     process.stdout.write(`${output}\n`);
     return 0;
+}
+
+async function runReinstall(rest: string[]): Promise<number> {
+    if (rest.length === 0) {
+        process.stderr.write(
+            'error: `focus reinstall <name> [name2 ...]` requires at least one brick name.\n',
+        );
+        return 1;
+    }
+    const installer = new NpmInstallerAdapter();
+    const io = {
+        fetch: new HttpFetchAdapter(),
+        store: new FilesystemCatalogStoreAdapter(),
+        installer,
+        getBricksDir: () => installer.getBricksDir(),
+        rmDir: async (path: string) => {
+            await rm(path, { recursive: true, force: true });
+        },
+    };
+    const result = await reinstallCommand({ brickNames: rest, io });
+    process.stdout.write(`${result.output}\n`);
+    return result.failed.length > 0 ? 1 : 0;
 }
 
 async function runSearch(rest: string[]): Promise<number> {
@@ -203,9 +245,13 @@ async function runDoctor(rest: string[]): Promise<number> {
         args: rest,
         allowPositionals: false,
         strict: false,
-        options: { json: { type: 'boolean' } },
+        options: {
+            json: { type: 'boolean' },
+            fix: { type: 'boolean' },
+        },
     });
     const jsonMode = doctorValues['json'] === true;
+    const fixMode = doctorValues['fix'] === true;
 
     const installer = new NpmInstallerAdapter();
     const bricksDir = installer.getBricksDir();
@@ -247,8 +293,17 @@ async function runDoctor(rest: string[]): Promise<number> {
         },
     };
 
-    const result = await doctorCommand({ io, json: jsonMode });
+    const result = await doctorCommand({ io, json: jsonMode, fix: fixMode });
     process.stdout.write(`${formatDoctorOutput(result, jsonMode)}\n`);
+
+    if (fixMode && !jsonMode) {
+        // Re-run doctor after fixes to show updated state
+        process.stdout.write('\n--- Re-running doctor after fixes ---\n\n');
+        const recheck = await doctorCommand({ io, json: false });
+        process.stdout.write(`${formatDoctorOutput(recheck, false)}\n`);
+        return recheck.errors > 0 ? 1 : 0;
+    }
+
     return result.errors > 0 ? 1 : 0;
 }
 
@@ -290,6 +345,8 @@ async function main(argv: string[]): Promise<number> {
             return runAdd(rest);
         case 'remove':
             return runRemove(rest);
+        case 'reinstall':
+            return runReinstall(rest);
         case 'upgrade':
             return runUpgrade(rest);
         case 'search':

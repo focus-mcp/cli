@@ -33,16 +33,28 @@ export interface AddIO {
     readonly fetch: FetchIO;
     readonly store: CatalogStoreIO;
     readonly installer: InstallerIO;
+    /**
+     * Optional: delete a directory by path (used by --force to wipe corrupted
+     * node_modules/<pkg> before re-installing). If absent, force-purge is
+     * skipped (dir removal handled by npm uninstall).
+     */
+    rmDir?(path: string): Promise<void>;
+    /** Return the bricks node_modules root (e.g. ~/.focus/bricks) */
+    getBricksDir?(): string;
 }
 
 export interface AddCommandInput {
     readonly brickName: string;
     readonly io: AddIO;
+    /** When true: re-install even if already present or corrupted */
+    readonly force?: boolean;
 }
 
 export interface AddManyCommandInput {
     readonly brickNames: readonly string[];
     readonly io: AddIO;
+    /** When true: re-install even if already present or corrupted */
+    readonly force?: boolean | undefined;
 }
 
 // ---------- catalog loading ----------
@@ -186,27 +198,72 @@ function buildSummary(
     return messages.join('\n');
 }
 
+// ---------- force-purge helper ----------
+
+/**
+ * When --force is set and the brick is already installed:
+ * 1. Wipe the corrupted node_modules/<pkg> dir (best-effort).
+ * 2. Remove the brick from center state.
+ * 3. Re-read state so the in-memory centerJson no longer lists the brick.
+ */
+async function forcePurgeBrick(
+    brickName: string,
+    centerJson: ReturnType<typeof parseCenterJson>,
+    centerLock: ReturnType<typeof parseCenterLock>,
+    io: AddIO,
+): Promise<void> {
+    const lockEntry = centerLock.bricks[brickName];
+
+    if (lockEntry !== undefined && io.getBricksDir !== undefined && io.rmDir !== undefined) {
+        const pkgDir = `${io.getBricksDir()}/node_modules/${lockEntry.npmPackage}`;
+        try {
+            await io.rmDir(pkgDir);
+        } catch {
+            // Best-effort: continue even if rm fails
+        }
+    }
+
+    try {
+        const { npmPackage } = planRemove(brickName, centerJson, centerLock);
+        await executeRemove(io.installer, brickName, npmPackage, centerJson, centerLock);
+    } catch {
+        // Best-effort: may already be partially gone
+    }
+
+    // Sync in-memory state to reflect removal
+    const rawCenter2 = await io.installer.readCenterJson();
+    const centerJson2 = parseCenterJson(rawCenter2);
+    Object.assign(centerJson.bricks, centerJson2.bricks);
+    delete (centerJson.bricks as Record<string, unknown>)[brickName];
+}
+
 // ---------- public API ----------
 
 /**
  * Executes the add command. Returns a user-facing message describing what was
  * installed or a clear error message when the brick cannot be found.
  */
-export async function addCommand({ brickName, io }: AddCommandInput): Promise<string> {
+export async function addCommand({ brickName, io, force }: AddCommandInput): Promise<string> {
     if (brickName.trim().length === 0) {
         throw new Error('Brick name must not be empty.');
     }
-    return addManyCommand({ brickNames: [brickName], io });
+    return addManyCommand({ brickNames: [brickName], io, force });
 }
 
 /**
  * Installs multiple bricks (and their transitive dependencies) in one run.
  *
- * - Skips bricks already present in center.json.
+ * - Skips bricks already present in center.json (unless force=true).
+ * - When force=true: removes existing center.json entry + optionally wipes the
+ *   corrupted node_modules/<pkg> dir before re-installing.
  * - Detects circular dependencies in the dep graph.
  * - Aborts and restores state on any install failure.
  */
-export async function addManyCommand({ brickNames, io }: AddManyCommandInput): Promise<string> {
+export async function addManyCommand({
+    brickNames,
+    io,
+    force = false,
+}: AddManyCommandInput): Promise<string> {
     if (brickNames.length === 0) throw new Error('At least one brick name is required.');
     for (const name of brickNames) {
         if (name.trim().length === 0) throw new Error('Brick name must not be empty.');
@@ -217,20 +274,24 @@ export async function addManyCommand({ brickNames, io }: AddManyCommandInput): P
     const rawCenter = await io.installer.readCenterJson();
     const rawLock = await io.installer.readCenterLock();
     const centerJson = parseCenterJson(rawCenter);
-    // rawLock is read here but only needed for the installer contract; re-read inside loop
-    void rawLock;
+    const centerLock = parseCenterLock(rawLock);
 
     const messages: string[] = [];
     const installOrder: string[] = [];
 
     for (const brickName of brickNames) {
         if (brickName in centerJson.bricks) {
-            const ver = centerJson.bricks[brickName]?.version ?? 'unknown';
-            messages.push(
-                `Brick "${brickName}" is already installed (version ${ver}). Use \`focus update\` to upgrade.`,
-            );
-            continue;
+            if (!force) {
+                const ver = centerJson.bricks[brickName]?.version ?? 'unknown';
+                messages.push(
+                    `Brick "${brickName}" is already installed (version ${ver}). Use \`focus update\` to upgrade.`,
+                );
+                continue;
+            }
+            messages.push(`Force-reinstalling "${brickName}"...`);
+            await forcePurgeBrick(brickName, centerJson, centerLock, io);
         }
+
         resolveDeps(brickName, aggregated, centerJson, [], installOrder, (msg) => {
             messages.push(msg);
         });
