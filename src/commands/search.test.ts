@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 FocusMCP contributors
 // SPDX-License-Identifier: MIT
 
-import { DEFAULT_CATALOG_URL } from '@focus-mcp/core';
 import { describe, expect, it, vi } from 'vitest';
 import type { CatalogStoreIO } from '../adapters/catalog-store-adapter.ts';
 import type { FetchIO } from '../adapters/http-fetch-adapter.ts';
@@ -9,7 +8,7 @@ import { searchCommand } from './search.ts';
 
 // ---------- helpers ----------
 
-const DEFAULT_URL = DEFAULT_CATALOG_URL;
+const DEFAULT_URL = 'https://focus-mcp.github.io/marketplace/catalog.json';
 
 function makeFetchIO(overrides: Partial<FetchIO> = {}): FetchIO {
     return {
