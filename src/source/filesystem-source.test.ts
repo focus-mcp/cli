@@ -3,20 +3,36 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockReadFile, mockAccess } = vi.hoisted(() => ({
+const { mockReadFile, mockCreateRequire, mockRealpathSync } = vi.hoisted(() => ({
     mockReadFile: vi.fn(),
-    mockAccess: vi.fn(),
+    mockCreateRequire: vi.fn(),
+    mockRealpathSync: vi.fn(),
 }));
 
 vi.mock('node:fs/promises', () => ({
     readFile: mockReadFile,
-    access: mockAccess,
+}));
+
+vi.mock('node:fs', () => ({
+    realpathSync: mockRealpathSync,
+}));
+
+// createRequire returns a require-like function with a .resolve method
+const mockResolve = vi.fn();
+vi.mock('node:module', () => ({
+    createRequire: mockCreateRequire,
 }));
 
 describe('FilesystemBrickSource', () => {
     beforeEach(() => {
         mockReadFile.mockReset();
-        mockAccess.mockReset();
+        mockResolve.mockReset();
+        mockCreateRequire.mockReset();
+        mockRealpathSync.mockReset();
+        // Default: realpathSync returns the path unchanged
+        mockRealpathSync.mockImplementation((p: string) => p);
+        // Default: createRequire returns an object with resolve
+        mockCreateRequire.mockReturnValue(Object.assign(mockResolve, { resolve: mockResolve }));
     });
 
     it('list() returns only enabled bricks', async () => {
@@ -55,10 +71,14 @@ describe('FilesystemBrickSource', () => {
         expect(list).toEqual([]);
     });
 
-    it('readManifest() reads mcp-brick.json from the correct path', async () => {
+    // ---------- readManifest — flat layout ----------
+
+    it('readManifest() resolves manifest via node module resolution (flat layout)', async () => {
         const { FilesystemBrickSource } = await import('./filesystem-source.ts');
 
         const manifest = { name: 'brick-a', version: '1.0.0', tools: [] };
+        // Simulate flat layout: <bricksDir>/brick-a/mcp-brick.json
+        mockResolve.mockReturnValue('/fake/bricks/brick-a/mcp-brick.json');
         mockReadFile.mockResolvedValue(JSON.stringify(manifest));
 
         const source = new FilesystemBrickSource({
@@ -68,14 +88,21 @@ describe('FilesystemBrickSource', () => {
 
         const result = await source.readManifest('catalog/brick-a');
 
+        expect(mockResolve).toHaveBeenCalledWith('@focus-mcp/brick-brick-a/mcp-brick.json');
         expect(mockReadFile).toHaveBeenCalledWith('/fake/bricks/brick-a/mcp-brick.json', 'utf-8');
         expect(result).toEqual(manifest);
     });
 
-    it('readManifest() uses the brick name directly when no catalog prefix', async () => {
+    // ---------- readManifest — npm-nested layout ----------
+
+    it('readManifest() resolves manifest via node module resolution (npm-nested layout)', async () => {
         const { FilesystemBrickSource } = await import('./filesystem-source.ts');
 
         const manifest = { name: 'brick-a', version: '1.0.0', tools: [] };
+        // Simulate npm layout: <bricksDir>/node_modules/@focus-mcp/brick-a/mcp-brick.json
+        mockResolve.mockReturnValue(
+            '/fake/bricks/node_modules/@focus-mcp/brick-brick-a/mcp-brick.json',
+        );
         mockReadFile.mockResolvedValue(JSON.stringify(manifest));
 
         const source = new FilesystemBrickSource({
@@ -85,15 +112,83 @@ describe('FilesystemBrickSource', () => {
 
         const result = await source.readManifest('brick-a');
 
-        expect(mockReadFile).toHaveBeenCalledWith('/fake/bricks/brick-a/mcp-brick.json', 'utf-8');
+        expect(mockResolve).toHaveBeenCalledWith('@focus-mcp/brick-brick-a/mcp-brick.json');
+        expect(mockReadFile).toHaveBeenCalledWith(
+            '/fake/bricks/node_modules/@focus-mcp/brick-brick-a/mcp-brick.json',
+            'utf-8',
+        );
         expect(result).toEqual(manifest);
     });
 
-    it('readManifest() throws when file is not found', async () => {
+    it('readManifest() uses the brick name directly when no catalog prefix', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        const manifest = { name: 'brick-a', version: '1.0.0', tools: [] };
+        mockResolve.mockReturnValue('/fake/bricks/brick-a/mcp-brick.json');
+        mockReadFile.mockResolvedValue(JSON.stringify(manifest));
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        const result = await source.readManifest('brick-a');
+
+        expect(mockResolve).toHaveBeenCalledWith('@focus-mcp/brick-brick-a/mcp-brick.json');
+        expect(result).toEqual(manifest);
+    });
+
+    it('readManifest() falls back to walking up from main when mcp-brick.json not in exports', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        const manifest = { name: 'brick-a', version: '1.0.0', tools: [] };
+
+        // First resolve call (subpath) throws ERR_PACKAGE_PATH_NOT_EXPORTED
+        // Second resolve call (main entry) returns a src path
+        let resolveCallCount = 0;
+        mockResolve.mockImplementation((specifier: string) => {
+            resolveCallCount++;
+            if (resolveCallCount === 1) {
+                // subpath not exported
+                const err = Object.assign(new Error('ERR_PACKAGE_PATH_NOT_EXPORTED'), {
+                    code: 'ERR_PACKAGE_PATH_NOT_EXPORTED',
+                });
+                throw err;
+            }
+            // main entry: inside node_modules
+            return '/fake/bricks/node_modules/@focus-mcp/brick-brick-a/src/index.ts';
+        });
+
+        // First readFile call (mcp-brick.json candidate) succeeds
+        mockReadFile.mockImplementation((p: string) => {
+            if (p === '/fake/bricks/node_modules/@focus-mcp/brick-brick-a/mcp-brick.json') {
+                return Promise.resolve(JSON.stringify(manifest));
+            }
+            // final read of manifest content
+            return Promise.resolve(JSON.stringify(manifest));
+        });
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        const result = await source.readManifest('brick-a');
+
+        expect(result).toEqual(manifest);
+        // Verify both resolve calls happened
+        expect(mockResolve).toHaveBeenCalledTimes(2);
+        expect(mockResolve).toHaveBeenNthCalledWith(1, '@focus-mcp/brick-brick-a/mcp-brick.json');
+        expect(mockResolve).toHaveBeenNthCalledWith(2, '@focus-mcp/brick-brick-a');
+    });
+
+    it('readManifest() throws when module resolve fails (file not found)', async () => {
         const { FilesystemBrickSource } = await import('./filesystem-source.ts');
 
         const error = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-        mockReadFile.mockRejectedValue(error);
+        mockResolve.mockImplementation(() => {
+            throw error;
+        });
 
         const source = new FilesystemBrickSource({
             centerJson: { bricks: {} },
@@ -103,7 +198,22 @@ describe('FilesystemBrickSource', () => {
         await expect(source.readManifest('catalog/missing-brick')).rejects.toThrow('ENOENT');
     });
 
-    // ---------- safeBrickName edge cases (lines 17-18) ----------
+    it('readManifest() throws if resolved path escapes bricksDir (symlink attack)', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        // Resolved path points outside bricksDir
+        mockResolve.mockReturnValue('/etc/passwd');
+        mockRealpathSync.mockReturnValue('/fake/bricks');
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        await expect(source.readManifest('evil')).rejects.toThrow(/escapes bricksDir/);
+    });
+
+    // ---------- safeBrickName edge cases ----------
 
     it('readManifest() throws for empty brick name', async () => {
         const { FilesystemBrickSource } = await import('./filesystem-source.ts');
@@ -138,36 +248,55 @@ describe('FilesystemBrickSource', () => {
         await expect(source.readManifest('..')).rejects.toThrow(/invalid brick name/i);
     });
 
-    // ---------- loadModule (lines 54-64) ----------
+    // ---------- loadModule — flat layout ----------
 
-    it('loadModule() calls access on the dist path first', async () => {
+    it('loadModule() resolves entry via node module resolution (flat layout)', async () => {
         const { FilesystemBrickSource } = await import('./filesystem-source.ts');
 
-        mockAccess.mockResolvedValue(undefined);
+        // Simulate flat layout: <bricksDir>/brick-a/dist/index.js
+        mockResolve.mockReturnValue('/fake/bricks/brick-a/dist/index.js');
 
         const source = new FilesystemBrickSource({
             centerJson: { bricks: {} },
             bricksDir: '/fake/bricks',
         });
 
-        // import() will fail because the path is not a real module — that is expected
+        // import() will fail for a fake path — that is expected
         await expect(source.loadModule('brick-a')).rejects.toThrow();
-        expect(mockAccess).toHaveBeenCalledWith('/fake/bricks/brick-a/dist/index.js');
+        expect(mockResolve).toHaveBeenCalledWith('@focus-mcp/brick-brick-a');
     });
 
-    it('loadModule() falls back to src/index.ts when dist/index.js is not accessible', async () => {
+    // ---------- loadModule — npm-nested layout ----------
+
+    it('loadModule() resolves entry via node module resolution (npm-nested layout)', async () => {
         const { FilesystemBrickSource } = await import('./filesystem-source.ts');
 
-        mockAccess.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+        // Simulate npm-nested layout
+        mockResolve.mockReturnValue(
+            '/fake/bricks/node_modules/@focus-mcp/brick-brick-a/dist/index.js',
+        );
 
         const source = new FilesystemBrickSource({
             centerJson: { bricks: {} },
             bricksDir: '/fake/bricks',
         });
 
-        // import() will fail because the path is not a real module — that is expected
+        // import() will fail for a fake path — that is expected
         await expect(source.loadModule('brick-a')).rejects.toThrow();
-        // access was called on dist path, then fell through to src path import
-        expect(mockAccess).toHaveBeenCalledWith('/fake/bricks/brick-a/dist/index.js');
+        expect(mockResolve).toHaveBeenCalledWith('@focus-mcp/brick-brick-a');
+    });
+
+    it('loadModule() throws if resolved entry escapes bricksDir (symlink attack)', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        mockResolve.mockReturnValue('/etc/evil.js');
+        mockRealpathSync.mockReturnValue('/fake/bricks');
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        await expect(source.loadModule('evil')).rejects.toThrow(/escapes bricksDir/);
     });
 });
