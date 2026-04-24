@@ -33,6 +33,8 @@ export interface CatalogAddInput {
 export interface CatalogRemoveInput {
     readonly subcommand: 'remove';
     readonly url: string;
+    /** When true, removes even the default catalog source. */
+    readonly force?: boolean;
     readonly io: CatalogCommandIO;
 }
 
@@ -81,13 +83,13 @@ async function catalogAdd({ url, name, io }: CatalogAddInput): Promise<string> {
     return `Added catalog "${name}" (${url})`;
 }
 
-async function catalogRemove({ url, io }: CatalogRemoveInput): Promise<string> {
+async function catalogRemove({ url, force, io }: CatalogRemoveInput): Promise<string> {
     if (url.trim().length === 0) {
         throw new Error('Catalog URL must not be empty.');
     }
 
     const store = await loadStore({ store: io.store });
-    const updated = removeSource(store, url);
+    const updated = removeSource(store, url, force === true ? { force: true } : {});
     await io.store.writeStore(updated as CatalogStoreData);
     return `Removed catalog ${url}`;
 }
