@@ -108,7 +108,7 @@ describe('NpmInstallerAdapter', () => {
     });
 
     describe('writeCenterJson()', () => {
-        it('creates the directory and writes the file', async () => {
+        it('creates the directory and writes the file with version header', async () => {
             vi.mocked(mkdir).mockResolvedValue(undefined);
             vi.mocked(writeFile).mockResolvedValue(undefined);
 
@@ -118,14 +118,14 @@ describe('NpmInstallerAdapter', () => {
             expect(mkdir).toHaveBeenCalledWith(FOCUS_DIR, { recursive: true });
             expect(writeFile).toHaveBeenCalledWith(
                 CENTER_JSON_PATH,
-                JSON.stringify(data, null, 4),
+                JSON.stringify({ version: '1', ...data }, null, 4),
                 'utf-8',
             );
         });
     });
 
     describe('writeCenterLock()', () => {
-        it('creates the directory and writes the file', async () => {
+        it('creates the directory and writes the file with version header', async () => {
             vi.mocked(mkdir).mockResolvedValue(undefined);
             vi.mocked(writeFile).mockResolvedValue(undefined);
 
@@ -144,7 +144,7 @@ describe('NpmInstallerAdapter', () => {
             expect(mkdir).toHaveBeenCalledWith(FOCUS_DIR, { recursive: true });
             expect(writeFile).toHaveBeenCalledWith(
                 CENTER_LOCK_PATH,
-                JSON.stringify(lockData, null, 4),
+                JSON.stringify({ version: '1', ...lockData }, null, 4),
                 'utf-8',
             );
         });

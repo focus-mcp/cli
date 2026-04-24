@@ -50,6 +50,9 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 /**
  * Parses a `center.json` payload. Throws on any structural violation.
+ *
+ * An optional top-level `version` field (`"1"`) is accepted and ignored for
+ * forward compatibility (schema versioning groundwork).
  */
 export function parseCenterJson(raw: unknown): CenterJson {
     if (!isObject(raw)) {
@@ -90,38 +93,49 @@ export function parseCenterJson(raw: unknown): CenterJson {
     return { bricks };
 }
 
+function parseLockEntry(key: string, value: unknown): CenterLockEntry {
+    if (!isObject(value)) {
+        throw new Error(`Invalid center.lock entry for "${key}": must be an object.`);
+    }
+    const version = value['version'];
+    if (typeof version !== 'string' || version.length === 0) {
+        throw new Error(`Invalid center.lock entry for "${key}": missing resolved \`version\`.`);
+    }
+    const entry: CenterLockEntry = { version };
+    const catalogUrl = value['catalog_url'];
+    if (typeof catalogUrl === 'string') entry.catalog_url = catalogUrl;
+    const catalogId = value['catalog_id'];
+    if (typeof catalogId === 'string') entry.catalog_id = catalogId;
+    const integrity = value['integrity'];
+    if (typeof integrity === 'string') entry.integrity = integrity;
+    const tarballUrl = value['tarballUrl'];
+    if (typeof tarballUrl === 'string') entry.tarballUrl = tarballUrl;
+    return entry;
+}
+
 /**
  * Parses a `center.lock` payload. Throws on any structural violation.
+ *
+ * Accepts both the legacy flat format `{ "brick": {...} }` (for backward
+ * compatibility) and the current wrapper format `{ bricks: { "brick": {...} } }`.
+ * An optional top-level `version` field (`"1"`) is accepted and ignored for
+ * forward compatibility.
  */
 export function parseCenterLock(raw: unknown): CenterLock {
     if (!isObject(raw)) {
         throw new Error('Invalid center.lock: root must be an object.');
     }
 
+    // Wrapper format: { bricks: { ... } } — written by `focus add`/`focus remove`.
+    // Fall back to flat format for backward compatibility with older on-disk files.
+    const bricksRaw = raw['bricks'];
+    const source = isObject(bricksRaw)
+        ? Object.entries(bricksRaw)
+        : Object.entries(raw).filter(([k]) => k !== 'version');
+
     const lock: CenterLock = {};
-    for (const [key, value] of Object.entries(raw)) {
-        if (!isObject(value)) {
-            throw new Error(`Invalid center.lock entry for "${key}": must be an object.`);
-        }
-        const version = value['version'];
-        if (typeof version !== 'string' || version.length === 0) {
-            throw new Error(
-                `Invalid center.lock entry for "${key}": missing resolved \`version\`.`,
-            );
-        }
-
-        const entry: CenterLockEntry = { version };
-        const catalogUrl = value['catalog_url'];
-        if (typeof catalogUrl === 'string') entry.catalog_url = catalogUrl;
-        const catalogId = value['catalog_id'];
-        if (typeof catalogId === 'string') entry.catalog_id = catalogId;
-        const integrity = value['integrity'];
-        if (typeof integrity === 'string') entry.integrity = integrity;
-        const tarballUrl = value['tarballUrl'];
-        if (typeof tarballUrl === 'string') entry.tarballUrl = tarballUrl;
-
-        lock[key] = entry;
+    for (const [key, value] of source) {
+        lock[key] = parseLockEntry(key, value);
     }
-
     return lock;
 }

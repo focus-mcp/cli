@@ -23,8 +23,7 @@ vi.mock('@focus-mcp/core', async (importOriginal) => {
 
 // ---------- helpers ----------
 
-const DEFAULT_URL =
-    'https://raw.githubusercontent.com/focus-mcp/marketplace/develop/publish/catalog.json';
+const DEFAULT_URL = 'https://focus-mcp.github.io/marketplace/catalog.json';
 const EXTRA_URL = 'https://example.com/catalog.json';
 
 function makeStoreIO(sourcesPayload: unknown = { sources: [] }): CatalogStoreIO {
@@ -194,11 +193,28 @@ describe('catalogCommand remove', () => {
         ).rejects.toThrow(/url must not be empty/i);
     });
 
-    it('throws when trying to remove the default catalog', async () => {
+    it('throws when trying to remove the default catalog without --force', async () => {
         const store = storeWithDefault();
         await expect(
             catalogCommand({ subcommand: 'remove', url: DEFAULT_URL, io: { store } }),
         ).rejects.toThrow(/cannot remove the default/i);
+    });
+
+    it('removes the default catalog when --force is passed', async () => {
+        const store = storeWithDefault();
+        const result = await catalogCommand({
+            subcommand: 'remove',
+            url: DEFAULT_URL,
+            force: true,
+            io: { store },
+        });
+
+        expect(store.writeStore).toHaveBeenCalledOnce();
+        const written = (store.writeStore as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as {
+            sources: Array<{ url: string }>;
+        };
+        expect(written.sources.some((s) => s.url === DEFAULT_URL)).toBe(false);
+        expect(result).toMatch(/removed catalog/i);
     });
 
     it('throws when the source does not exist', async () => {

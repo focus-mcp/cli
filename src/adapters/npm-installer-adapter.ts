@@ -141,11 +141,19 @@ export class NpmInstallerAdapter implements InstallerIO {
 
     async writeCenterJson(data: CenterJson): Promise<void> {
         await mkdir(FOCUS_DIR, { recursive: true });
-        await writeFile(CENTER_JSON_PATH, JSON.stringify(data, null, 4), 'utf-8');
+        await writeFile(
+            CENTER_JSON_PATH,
+            JSON.stringify({ version: '1', ...data }, null, 4),
+            'utf-8',
+        );
     }
 
     async writeCenterLock(data: CenterLock): Promise<void> {
         await mkdir(FOCUS_DIR, { recursive: true });
-        await writeFile(CENTER_LOCK_PATH, JSON.stringify(data, null, 4), 'utf-8');
+        await writeFile(
+            CENTER_LOCK_PATH,
+            JSON.stringify({ version: '1', ...data }, null, 4),
+            'utf-8',
+        );
     }
 }

@@ -140,13 +140,19 @@ async function runCatalog(rest: string[]): Promise<number> {
     }
 
     if (sub === 'remove') {
-        const url = rest[1];
+        const { values: removeValues, positionals: removePosArgs } = parseArgs({
+            args: rest.slice(1),
+            allowPositionals: true,
+            strict: false,
+            options: { force: { type: 'boolean', short: 'f' } },
+        });
+        const url = removePosArgs[0];
         if (!url) {
             process.stderr.write('error: `focus catalog remove <url>` requires a URL.\n');
             return 1;
         }
         process.stdout.write(
-            `${await catalogCommand({ subcommand: 'remove', url, io: { store } })}\n`,
+            `${await catalogCommand({ subcommand: 'remove', url, force: removeValues['force'] === true, io: { store } })}\n`,
         );
         return 0;
     }
