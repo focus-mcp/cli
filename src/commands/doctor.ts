@@ -25,6 +25,8 @@ import {
 import type { CatalogStoreIO } from '../adapters/catalog-store-adapter.ts';
 import type { FetchIO } from '../adapters/http-fetch-adapter.ts';
 import type { InstallerIO } from '../adapters/npm-installer-adapter.ts';
+import { addManyCommand } from './add.ts';
+import { reinstallCommand } from './reinstall.ts';
 
 // ---------- interfaces ----------
 
@@ -66,6 +68,13 @@ export interface DoctorResult {
 export interface DoctorCommandInput {
     readonly io: DoctorIO;
     readonly json?: boolean;
+    /**
+     * When true: auto-remediate detected issues.
+     * - Corrupted installs  → focus reinstall <name>
+     * - Missing deps        → focus add <dep>
+     * - Version drift       → NOT auto-fixed (use `focus upgrade`)
+     */
+    readonly fix?: boolean;
 }
 
 // ---------- check helpers ----------
@@ -267,9 +276,100 @@ function formatText(result: DoctorResult): string {
     return header.join('\n');
 }
 
+// ---------- auto-fix helpers ----------
+
+/**
+ * Extract names of bricks with corrupted installs (error or corrupted warning).
+ * These should be reinstalled.
+ */
+function corruptedBricks(findings: readonly DoctorFinding[]): string[] {
+    const names: string[] = [];
+    for (const f of findings) {
+        if (f.severity !== 'error' && f.severity !== 'warning') continue;
+        // Matches messages like "echo: package directory missing ..." or
+        // "echo: dist/index.js missing" or "echo: mcp-brick.json missing"
+        const corrupted =
+            f.message.includes('package directory missing') ||
+            f.message.includes('dist/index.js missing') ||
+            f.message.includes('mcp-brick.json missing') ||
+            f.message.includes('mcp-brick.json is invalid') ||
+            f.message.includes('lock entry missing');
+        if (corrupted) {
+            // Extract brick name (everything before the first ':')
+            const name = f.message.split(':')[0]?.trim();
+            if (name !== undefined && name.length > 0 && !names.includes(name)) {
+                names.push(name);
+            }
+        }
+    }
+    return names;
+}
+
+/**
+ * Extract names of missing dependencies from findings.
+ */
+function missingDeps(findings: readonly DoctorFinding[]): string[] {
+    const deps: string[] = [];
+    for (const f of findings) {
+        if (f.severity !== 'warning') continue;
+        // "echo: missing declared dependency "fileread""
+        const match = f.message.match(/missing declared dependency "([^"]+)"/);
+        if (match?.[1] !== undefined && !deps.includes(match[1])) {
+            deps.push(match[1]);
+        }
+    }
+    return deps;
+}
+
+async function applyFixes(findings: readonly DoctorFinding[], io: DoctorIO): Promise<string[]> {
+    const actionLog: string[] = [];
+
+    const toReinstall = corruptedBricks(findings);
+    for (const name of toReinstall) {
+        actionLog.push(`  → focus reinstall ${name}`);
+        try {
+            await reinstallCommand({
+                brickNames: [name],
+                io: {
+                    fetch: io.fetch,
+                    store: io.store,
+                    installer: io.installer,
+                    getBricksDir: () => io.getBricksDir(),
+                },
+            });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            actionLog.push(`    ✗ failed: ${msg}`);
+        }
+    }
+
+    const toAdd = missingDeps(findings);
+    for (const dep of toAdd) {
+        actionLog.push(`  → focus add ${dep}`);
+        try {
+            await addManyCommand({
+                brickNames: [dep],
+                io: {
+                    fetch: io.fetch,
+                    store: io.store,
+                    installer: io.installer,
+                },
+            });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            actionLog.push(`    ✗ failed: ${msg}`);
+        }
+    }
+
+    return actionLog;
+}
+
 // ---------- public API ----------
 
-export async function doctorCommand({ io }: DoctorCommandInput): Promise<DoctorResult> {
+export async function doctorCommand({
+    io,
+    fix = false,
+}: DoctorCommandInput): Promise<DoctorResult & { fixLog?: string[] }> {
     const rawCenter = await io.installer.readCenterJson();
     const rawLock = await io.installer.readCenterLock();
     const centerJson = parseCenterJson(rawCenter);
@@ -281,6 +381,12 @@ export async function doctorCommand({ io }: DoctorCommandInput): Promise<DoctorR
     const { catalog } = await checkCatalogSources(io, findings);
     checkDependencyCompleteness(centerJson, catalog, findings);
     checkVersionDrift(centerJson, catalog, findings);
+
+    let fixLog: string[] | undefined;
+
+    if (fix) {
+        fixLog = await applyFixes(findings, io);
+    }
 
     const errors = findings.filter((f) => f.severity === 'error').length;
     const warnings = findings.filter((f) => f.severity === 'warning').length;
@@ -295,12 +401,20 @@ export async function doctorCommand({ io }: DoctorCommandInput): Promise<DoctorR
         errors,
         warnings,
         infos,
+        ...(fixLog !== undefined ? { fixLog } : {}),
     };
 }
 
-export function formatDoctorOutput(result: DoctorResult, json: boolean): string {
+export function formatDoctorOutput(
+    result: DoctorResult & { fixLog?: string[] },
+    json: boolean,
+): string {
     if (json) {
         return JSON.stringify(result, null, 2);
     }
-    return formatText(result);
+    const base = formatText(result);
+    if (result.fixLog !== undefined && result.fixLog.length > 0) {
+        return `${base}\nActions taken:\n${result.fixLog.join('\n')}`;
+    }
+    return base;
 }

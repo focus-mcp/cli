@@ -326,4 +326,92 @@ describe('formatDoctorOutput', () => {
         expect(out).toMatch(/FocusMCP Doctor/);
         expect(out).toMatch(/Summary/);
     });
+
+    it('appends fixLog to output when fixLog is present', () => {
+        const result = {
+            findings: [],
+            bricksInstalled: 1,
+            cliVersion: '1.8.0',
+            coreVersion: '1.2.0',
+            focusDir: '/home/user/.focus',
+            errors: 0,
+            warnings: 0,
+            infos: 0,
+            fixLog: ['  → focus reinstall echo', '  → focus add dep'],
+        };
+        const out = formatDoctorOutput(result, false);
+        expect(out).toMatch(/Actions taken/);
+        expect(out).toMatch(/focus reinstall echo/);
+        expect(out).toMatch(/focus add dep/);
+    });
+});
+
+// ---------- doctor --fix flag ----------
+
+describe('doctorCommand --fix', () => {
+    it('includes fixLog in result when fix=true and there are corrupted installs', async () => {
+        // Simulate a missing package dir (error finding)
+        const io = makeDoctorIO({
+            installer: makeInstallerIO({
+                readCenterJson: vi
+                    .fn()
+                    .mockResolvedValue(
+                        installedCenterJson({ echo: { version: '1.0.0', enabled: true } }),
+                    ),
+                readCenterLock: vi
+                    .fn()
+                    .mockResolvedValue(installedCenterLock({ echo: lockEntry('echo') })),
+            }),
+            fileExists: vi.fn().mockResolvedValue(false), // triggers package dir missing error
+        });
+
+        const result = await doctorCommand({ io, fix: true });
+        expect(result.fixLog).toBeDefined();
+        expect(Array.isArray(result.fixLog)).toBe(true);
+        // Should attempt to reinstall echo
+        expect(result.fixLog?.some((line) => line.includes('echo'))).toBe(true);
+    });
+
+    it('includes fixLog for missing deps when fix=true', async () => {
+        const io = makeDoctorIO({
+            installer: makeInstallerIO({
+                readCenterJson: vi
+                    .fn()
+                    .mockResolvedValue(
+                        installedCenterJson({ codebase: { version: '1.0.0', enabled: true } }),
+                    ),
+                readCenterLock: vi
+                    .fn()
+                    .mockResolvedValue(installedCenterLock({ codebase: lockEntry('codebase') })),
+            }),
+            fetch: makeFetchIO({
+                fetchJson: vi
+                    .fn()
+                    .mockResolvedValue(
+                        validCatalog([
+                            validCatalogBrick({ name: 'codebase', dependencies: ['fileread'] }),
+                            validCatalogBrick({ name: 'fileread', dependencies: [] }),
+                        ]),
+                    ),
+            }),
+        });
+
+        const result = await doctorCommand({ io, fix: true });
+        expect(result.fixLog).toBeDefined();
+        expect(result.fixLog?.some((line) => line.includes('fileread'))).toBe(true);
+    });
+
+    it('returns undefined fixLog when fix=false', async () => {
+        const io = makeDoctorIO();
+        const result = await doctorCommand({ io, fix: false });
+        expect(result.fixLog).toBeUndefined();
+    });
+
+    it('returns empty fixLog when fix=true and no actionable issues', async () => {
+        // No installed bricks, no issues to fix
+        const io = makeDoctorIO();
+        const result = await doctorCommand({ io, fix: true });
+        expect(result.fixLog).toBeDefined();
+        expect(result.fixLog).toHaveLength(0);
+    });
 });
