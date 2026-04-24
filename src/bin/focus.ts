@@ -21,6 +21,8 @@ import { parseCenterJson, parseCenterLock } from '../center.ts';
 import { addManyCommand } from '../commands/add.ts';
 import { browseCommand } from '../commands/browse.ts';
 import { catalogCommand } from '../commands/catalog.ts';
+import type { DoctorIO } from '../commands/doctor.ts';
+import { doctorCommand, formatDoctorOutput } from '../commands/doctor.ts';
 import { infoCommand } from '../commands/info.ts';
 import { listCommand } from '../commands/list.ts';
 import { removeManyCommand } from '../commands/remove.ts';
@@ -39,6 +41,7 @@ Commands:
   remove <name> [...]     Uninstall one or more bricks
   search [query]          Search bricks in the catalog
   catalog                 Manage catalog sources (add|remove|list)
+  doctor [--json]         Audit local state and report actionable issues
   browse                  Interactive TUI to browse catalogs and bricks
   start                   Launch FocusMCP as a stdio MCP server (AI clients attach here)
   help                    Print this help
@@ -164,6 +167,60 @@ async function runCatalog(rest: string[]): Promise<number> {
     return 0;
 }
 
+async function runDoctor(rest: string[]): Promise<number> {
+    const { values: doctorValues } = parseArgs({
+        args: rest,
+        allowPositionals: false,
+        strict: false,
+        options: { json: { type: 'boolean' } },
+    });
+    const jsonMode = doctorValues['json'] === true;
+
+    const installer = new NpmInstallerAdapter();
+    const bricksDir = installer.getBricksDir();
+    const focusDir = installer.getFocusDir();
+
+    const { access, readFile: fsReadFile } = await import('node:fs/promises');
+
+    const io: DoctorIO = {
+        fetch: new HttpFetchAdapter(),
+        store: new FilesystemCatalogStoreAdapter(),
+        installer,
+        async fileExists(path: string): Promise<boolean> {
+            try {
+                await access(path);
+                return true;
+            } catch {
+                return false;
+            }
+        },
+        async readJsonFile(path: string): Promise<unknown> {
+            try {
+                const raw = await fsReadFile(path, 'utf-8');
+                return JSON.parse(raw) as unknown;
+            } catch {
+                return null;
+            }
+        },
+        getBricksDir(): string {
+            return bricksDir;
+        },
+        getCliVersion(): string {
+            return process.env['CLI_VERSION'] ?? '0.0.0';
+        },
+        getCoreVersion(): string {
+            return process.env['CORE_VERSION'] ?? '0.0.0';
+        },
+        getFocusDir(): string {
+            return focusDir;
+        },
+    };
+
+    const result = await doctorCommand({ io, json: jsonMode });
+    process.stdout.write(`${formatDoctorOutput(result, jsonMode)}\n`);
+    return result.errors > 0 ? 1 : 0;
+}
+
 // ---------- main ----------
 
 async function main(argv: string[]): Promise<number> {
@@ -206,6 +263,8 @@ async function main(argv: string[]): Promise<number> {
             return runSearch(rest);
         case 'catalog':
             return runCatalog(rest);
+        case 'doctor':
+            return runDoctor(rest);
         case 'browse':
             await browseCommand();
             return 0;
