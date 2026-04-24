@@ -1,5 +1,11 @@
 # @focus-mcp/cli
 
+## 1.7.0
+
+### Minor Changes
+
+- Add `focus upgrade <name>` and `focus upgrade --all` to refresh installed bricks to the latest catalog version. Also accepts `--check` for dry-run.
+
 ## 1.6.0
 
 ### Minor Changes
