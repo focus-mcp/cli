@@ -2081,4 +2081,97 @@ describe('startCommand', () => {
 
         void promise;
     });
+
+    // ---------- FOCUS_BENCH_MODE — meta tool isolation ----------
+
+    it('FOCUS_BENCH_MODE=true skips meta tools (focus_list, focus_install, etc.)', async () => {
+        const originalEnv = process.env['FOCUS_BENCH_MODE'];
+        process.env['FOCUS_BENCH_MODE'] = 'true';
+        try {
+            mockListTools.mockReturnValue([]);
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const listToolsCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'ListToolsRequestSchema',
+            );
+            if (!listToolsCall) throw new Error('ListTools handler not registered');
+
+            const handler = listToolsCall[1] as () => Promise<{ tools: unknown[] }>;
+            const result = await handler();
+
+            // No meta tools should be present
+            const names = (result.tools as Array<{ name: string }>).map((t) => t.name);
+            const META_TOOL_NAMES = [
+                'focus_list',
+                'focus_load',
+                'focus_unload',
+                'focus_reload',
+                'focus_search',
+                'focus_install',
+                'focus_remove',
+                'focus_update',
+                'focus_catalog_add',
+                'focus_catalog_list',
+                'focus_catalog_remove',
+            ];
+            for (const metaName of META_TOOL_NAMES) {
+                expect(names).not.toContain(metaName);
+            }
+
+            void promise;
+        } finally {
+            if (originalEnv === undefined) {
+                delete process.env['FOCUS_BENCH_MODE'];
+            } else {
+                process.env['FOCUS_BENCH_MODE'] = originalEnv;
+            }
+        }
+    });
+
+    it('FOCUS_BENCH_MODE absent registers all meta tools', async () => {
+        const originalEnv = process.env['FOCUS_BENCH_MODE'];
+        delete process.env['FOCUS_BENCH_MODE'];
+        try {
+            mockListTools.mockReturnValue([]);
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const listToolsCall = mockSetRequestHandler.mock.calls.find(
+                (call) => call[0] === 'ListToolsRequestSchema',
+            );
+            if (!listToolsCall) throw new Error('ListTools handler not registered');
+
+            const handler = listToolsCall[1] as () => Promise<{ tools: unknown[] }>;
+            const result = await handler();
+
+            const names = (result.tools as Array<{ name: string }>).map((t) => t.name);
+            const META_TOOL_NAMES = [
+                'focus_list',
+                'focus_load',
+                'focus_unload',
+                'focus_reload',
+                'focus_search',
+                'focus_install',
+                'focus_remove',
+                'focus_update',
+                'focus_catalog_add',
+                'focus_catalog_list',
+                'focus_catalog_remove',
+            ];
+            for (const metaName of META_TOOL_NAMES) {
+                expect(names).toContain(metaName);
+            }
+
+            void promise;
+        } finally {
+            if (originalEnv === undefined) {
+                delete process.env['FOCUS_BENCH_MODE'];
+            } else {
+                process.env['FOCUS_BENCH_MODE'] = originalEnv;
+            }
+        }
+    });
 });
