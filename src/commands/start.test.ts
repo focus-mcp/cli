@@ -31,6 +31,12 @@ const {
     mockRemoveCommand,
     mockCatalogCommand,
     mockUpgradeCommand,
+    mockConfigToolsHideCommand,
+    mockConfigToolsShowCommand,
+    mockConfigToolsPinCommand,
+    mockConfigToolsUnpinCommand,
+    mockConfigToolsListCommand,
+    mockConfigToolsClearCommand,
 } = vi.hoisted(() => {
     const mockListen = vi.fn();
     const mockOnce = vi.fn();
@@ -78,6 +84,12 @@ const {
             failed: 0,
             output: 'echo: 1.0.0 → 2.0.0\n\n1 upgraded, 0 up-to-date, 0 failed',
         }),
+        mockConfigToolsHideCommand: vi.fn().mockResolvedValue('hidden ok'),
+        mockConfigToolsShowCommand: vi.fn().mockResolvedValue('shown ok'),
+        mockConfigToolsPinCommand: vi.fn().mockResolvedValue('pinned ok'),
+        mockConfigToolsUnpinCommand: vi.fn().mockResolvedValue('unpinned ok'),
+        mockConfigToolsListCommand: vi.fn().mockResolvedValue('hidden: (none)\nalwaysLoad: (none)'),
+        mockConfigToolsClearCommand: vi.fn().mockResolvedValue('cleared ok'),
     };
 });
 
@@ -104,6 +116,14 @@ vi.mock('./add.ts', () => ({ addCommand: mockAddCommand }));
 vi.mock('./remove.ts', () => ({ removeCommand: mockRemoveCommand }));
 vi.mock('./catalog.ts', () => ({ catalogCommand: mockCatalogCommand }));
 vi.mock('./upgrade.ts', () => ({ upgradeCommand: mockUpgradeCommand }));
+vi.mock('./config.ts', () => ({
+    configToolsHideCommand: mockConfigToolsHideCommand,
+    configToolsShowCommand: mockConfigToolsShowCommand,
+    configToolsPinCommand: mockConfigToolsPinCommand,
+    configToolsUnpinCommand: mockConfigToolsUnpinCommand,
+    configToolsListCommand: mockConfigToolsListCommand,
+    configToolsClearCommand: mockConfigToolsClearCommand,
+}));
 
 vi.mock('../adapters/catalog-store-adapter.ts', () => ({
     FilesystemCatalogStoreAdapter: vi.fn().mockImplementation(() => ({})),
@@ -173,7 +193,8 @@ describe('startCommand', () => {
         mockSetRequestHandler.mockClear();
         mockCallTool.mockReset();
         mockCallTool.mockResolvedValue({ content: [] });
-        mockListTools.mockClear();
+        mockListTools.mockReset();
+        mockListTools.mockReturnValue([]);
         lastTransportInstance.current = null;
         mockListen.mockReset();
         mockOnce.mockReset();
@@ -203,6 +224,18 @@ describe('startCommand', () => {
             failed: 0,
             output: 'echo: 1.0.0 → 2.0.0\n\n1 upgraded, 0 up-to-date, 0 failed',
         });
+        mockConfigToolsHideCommand.mockReset();
+        mockConfigToolsHideCommand.mockResolvedValue('hidden ok');
+        mockConfigToolsShowCommand.mockReset();
+        mockConfigToolsShowCommand.mockResolvedValue('shown ok');
+        mockConfigToolsPinCommand.mockReset();
+        mockConfigToolsPinCommand.mockResolvedValue('pinned ok');
+        mockConfigToolsUnpinCommand.mockReset();
+        mockConfigToolsUnpinCommand.mockResolvedValue('unpinned ok');
+        mockConfigToolsListCommand.mockReset();
+        mockConfigToolsListCommand.mockResolvedValue('hidden: (none)\nalwaysLoad: (none)');
+        mockConfigToolsClearCommand.mockReset();
+        mockConfigToolsClearCommand.mockResolvedValue('cleared ok');
     });
 
     afterEach(() => {
@@ -323,7 +356,7 @@ describe('startCommand', () => {
         const handler = listToolsCall[1] as () => Promise<{ tools: unknown[] }>;
         const result = await handler();
 
-        // Should include the brick tool + 13 internal tools (12 management + focus_config)
+        // Should include the brick tool + 13 internal tools (12 management + focus_tools)
         expect(result.tools).toEqual(
             expect.arrayContaining([
                 {
@@ -343,7 +376,7 @@ describe('startCommand', () => {
                 expect.objectContaining({ name: 'focus_catalog_add' }),
                 expect.objectContaining({ name: 'focus_catalog_list' }),
                 expect.objectContaining({ name: 'focus_catalog_remove' }),
-                expect.objectContaining({ name: 'focus_config' }),
+                expect.objectContaining({ name: 'focus_tools' }),
             ]),
         );
         expect((result.tools as unknown[]).length).toBe(14);
@@ -2396,7 +2429,7 @@ describe('startCommand', () => {
                 'focus_catalog_add',
                 'focus_catalog_list',
                 'focus_catalog_remove',
-                'focus_config',
+                'focus_tools',
             ];
             for (const metaName of META_TOOL_NAMES) {
                 expect(names).toContain(metaName);
@@ -2441,10 +2474,10 @@ describe('startCommand', () => {
         expect(isHiddenTool('sym_find', ['focus_*', 'sym_*'])).toBe(true);
     });
 
-    it('isHiddenTool: focus_config is immune (never hidden)', async () => {
+    it('isHiddenTool: focus_tools is immune (never hidden)', async () => {
         const { isHiddenTool } = await import('./start.ts');
-        expect(isHiddenTool('focus_config', ['focus_*'])).toBe(false);
-        expect(isHiddenTool('focus_config', ['focus_config'])).toBe(false);
+        expect(isHiddenTool('focus_tools', ['focus_*'])).toBe(false);
+        expect(isHiddenTool('focus_tools', ['focus_tools'])).toBe(false);
     });
 
     // ---------- Tool filter: --hide CLI arg integration ----------
@@ -2482,7 +2515,7 @@ describe('startCommand', () => {
         void promise;
     });
 
-    it('--hide=focus_* hides focus_* but focus_config stays visible', async () => {
+    it('--hide=focus_* hides focus_* but focus_tools stays visible', async () => {
         mockListTools.mockReturnValue([]);
 
         const { startCommand } = await import('./start.ts');
@@ -2499,7 +2532,7 @@ describe('startCommand', () => {
         const names = result.tools.map((t) => t.name);
         expect(names).not.toContain('focus_list'); // hidden by focus_*
         expect(names).not.toContain('focus_install'); // hidden by focus_*
-        expect(names).toContain('focus_config'); // immune — always visible
+        expect(names).toContain('focus_tools'); // immune — always visible
 
         void promise;
     });
@@ -2731,5 +2764,165 @@ describe('startCommand', () => {
         expect(meta?.['anthropic/alwaysLoad']).toBe(true);
 
         void promise;
+    });
+
+    // ---------- MCP tool: focus_tools ----------
+
+    describe('focus_tools MCP tool', () => {
+        /** Helper: get the CallTool handler from a started server */
+        async function getCallToolHandler(): Promise<
+            (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>
+        > {
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+            const call = mockSetRequestHandler.mock.calls.find(
+                (c) => c[0] === 'CallToolRequestSchema',
+            );
+            if (!call) throw new Error('CallTool handler not registered');
+            void promise;
+            return call[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+        }
+
+        it('focus_tools is always present in ListTools regardless of --hide=focus_*', async () => {
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand(['--hide=focus_*']);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const listToolsCall = mockSetRequestHandler.mock.calls.find(
+                (c) => c[0] === 'ListToolsRequestSchema',
+            );
+            if (!listToolsCall) throw new Error('ListTools handler not registered');
+            const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+            const result = await handler();
+            expect(result.tools.map((t) => t.name)).toContain('focus_tools');
+
+            void promise;
+        });
+
+        it('focus_tools action=hide delegates to configToolsHideCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: {
+                    name: 'focus_tools',
+                    arguments: { action: 'hide', pattern: 'sym_get' },
+                },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toBe('hidden ok');
+            expect(mockConfigToolsHideCommand).toHaveBeenCalledWith('sym_get');
+        });
+
+        it('focus_tools action=show delegates to configToolsShowCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: {
+                    name: 'focus_tools',
+                    arguments: { action: 'show', pattern: 'sym_get' },
+                },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toBe('shown ok');
+            expect(mockConfigToolsShowCommand).toHaveBeenCalledWith('sym_get');
+        });
+
+        it('focus_tools action=pin delegates to configToolsPinCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: {
+                    name: 'focus_tools',
+                    arguments: { action: 'pin', pattern: 'ts_index' },
+                },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toBe('pinned ok');
+            expect(mockConfigToolsPinCommand).toHaveBeenCalledWith('ts_index');
+        });
+
+        it('focus_tools action=unpin delegates to configToolsUnpinCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: {
+                    name: 'focus_tools',
+                    arguments: { action: 'unpin', pattern: 'ts_index' },
+                },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toBe('unpinned ok');
+            expect(mockConfigToolsUnpinCommand).toHaveBeenCalledWith('ts_index');
+        });
+
+        it('focus_tools action=list delegates to configToolsListCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: { name: 'focus_tools', arguments: { action: 'list' } },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toContain('hidden');
+            expect(mockConfigToolsListCommand).toHaveBeenCalled();
+        });
+
+        it('focus_tools action=clear delegates to configToolsClearCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: { name: 'focus_tools', arguments: { action: 'clear' } },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toBe('cleared ok');
+            expect(mockConfigToolsClearCommand).toHaveBeenCalled();
+        });
+
+        it('focus_tools returns isError when pattern is missing for hide', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: { name: 'focus_tools', arguments: { action: 'hide' } },
+            });
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Missing or invalid pattern');
+        });
+
+        it('focus_tools returns isError for unknown action', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: { name: 'focus_tools', arguments: { action: 'unknown_action' } },
+            });
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Unknown action');
+        });
+
+        it('focus_tools returns isError when action is missing', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: { name: 'focus_tools', arguments: {} },
+            });
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Missing or invalid action');
+        });
+
+        it('focus_tools is accessible even in bench mode (immune to bench mode skip)', async () => {
+            const originalEnv = process.env['FOCUS_BENCH_MODE'];
+            process.env['FOCUS_BENCH_MODE'] = 'true';
+            try {
+                const handler = await getCallToolHandler();
+                const result = await handler({
+                    params: {
+                        name: 'focus_tools',
+                        arguments: { action: 'list' },
+                    },
+                });
+                expect(result.isError).toBeUndefined();
+                expect(mockConfigToolsListCommand).toHaveBeenCalled();
+            } finally {
+                if (originalEnv === undefined) {
+                    delete process.env['FOCUS_BENCH_MODE'];
+                } else {
+                    process.env['FOCUS_BENCH_MODE'] = originalEnv;
+                }
+            }
+        });
     });
 });
