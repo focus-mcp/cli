@@ -323,7 +323,7 @@ describe('startCommand', () => {
         const handler = listToolsCall[1] as () => Promise<{ tools: unknown[] }>;
         const result = await handler();
 
-        // Should include the brick tool + 12 internal tools
+        // Should include the brick tool + 13 internal tools (12 management + focus_filter)
         expect(result.tools).toEqual(
             expect.arrayContaining([
                 {
@@ -343,9 +343,10 @@ describe('startCommand', () => {
                 expect.objectContaining({ name: 'focus_catalog_add' }),
                 expect.objectContaining({ name: 'focus_catalog_list' }),
                 expect.objectContaining({ name: 'focus_catalog_remove' }),
+                expect.objectContaining({ name: 'focus_filter' }),
             ]),
         );
-        expect((result.tools as unknown[]).length).toBe(13);
+        expect((result.tools as unknown[]).length).toBe(14);
 
         void promise;
     });
@@ -2282,6 +2283,7 @@ describe('startCommand', () => {
     it('enriches a Missing dependency error with actionable focus commands', async () => {
         // Simulate a brick that fails to load with a Missing dependency error.
         // enrichStartError intercepts the message and adds recovery hints.
+        // Read order: config.json first (ENOENT → no filter), then center.json (has the brick).
         mockLoadBricks.mockResolvedValueOnce({
             bricks: [],
             failures: [
@@ -2291,9 +2293,11 @@ describe('startCommand', () => {
                 },
             ],
         });
-        mockReadFile.mockResolvedValueOnce(
-            JSON.stringify({ bricks: { codebase: { version: '1.0.0', enabled: true } } }),
-        );
+        mockReadFile
+            .mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' })) // config.json absent
+            .mockResolvedValueOnce(
+                JSON.stringify({ bricks: { codebase: { version: '1.0.0', enabled: true } } }),
+            ); // center.json
 
         const { startCommand } = await import('./start.ts');
         // stdio mode blocks forever — run without await
@@ -2405,5 +2409,258 @@ describe('startCommand', () => {
                 process.env['FOCUS_BENCH_MODE'] = originalEnv;
             }
         }
+    });
+
+    // ---------- Tool filter: matchesPattern + isHiddenTool ----------
+
+    it('matchesPattern matches exact tool names', async () => {
+        const { matchesPattern } = await import('./start.ts');
+        expect(matchesPattern('focus_list', 'focus_list')).toBe(true);
+        expect(matchesPattern('focus_list', 'focus_load')).toBe(false);
+    });
+
+    it('matchesPattern supports trailing wildcard', async () => {
+        const { matchesPattern } = await import('./start.ts');
+        expect(matchesPattern('focus_install', 'focus_*')).toBe(true);
+        expect(matchesPattern('focus_list', 'focus_*')).toBe(true);
+        expect(matchesPattern('sym_find', 'focus_*')).toBe(false);
+        expect(matchesPattern('sym_find', 'sym_*')).toBe(true);
+    });
+
+    it('isHiddenTool: no hidden list → nothing hidden', async () => {
+        const { isHiddenTool } = await import('./start.ts');
+        expect(isHiddenTool('any_tool', null)).toBe(false);
+        expect(isHiddenTool('focus_list', null)).toBe(false);
+    });
+
+    it('isHiddenTool: hidden list → matching tools hidden', async () => {
+        const { isHiddenTool } = await import('./start.ts');
+        expect(isHiddenTool('focus_list', ['focus_*'])).toBe(true);
+        expect(isHiddenTool('sym_find', ['focus_*'])).toBe(false);
+        expect(isHiddenTool('sym_find', ['focus_*', 'sym_*'])).toBe(true);
+    });
+
+    it('isHiddenTool: focus_filter is immune (never hidden)', async () => {
+        const { isHiddenTool } = await import('./start.ts');
+        expect(isHiddenTool('focus_filter', ['focus_*'])).toBe(false);
+        expect(isHiddenTool('focus_filter', ['focus_filter'])).toBe(false);
+    });
+
+    // ---------- Tool filter: --hide CLI arg integration ----------
+
+    it('--hide=sym_get hides sym_get from tools/list', async () => {
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+            {
+                name: 'sym_get',
+                description: 'get',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand(['--hide=sym_get']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).toContain('sym_find'); // not hidden
+        expect(names).toContain('focus_list'); // not hidden
+        expect(names).not.toContain('sym_get'); // hidden
+
+        void promise;
+    });
+
+    it('--hide=focus_* hides focus_* but focus_filter stays visible', async () => {
+        mockListTools.mockReturnValue([]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand(['--hide=focus_*']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).not.toContain('focus_list'); // hidden by focus_*
+        expect(names).not.toContain('focus_install'); // hidden by focus_*
+        expect(names).toContain('focus_filter'); // immune — always visible
+
+        void promise;
+    });
+
+    it('no filter option → all tools exposed (default behaviour)', async () => {
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+            {
+                name: 'ts_index',
+                description: 'index',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).toContain('sym_find');
+        expect(names).toContain('ts_index');
+        expect(names).toContain('focus_list');
+
+        void promise;
+    });
+
+    it('dispatcher rejects calls to hidden tools', async () => {
+        mockListTools.mockReturnValue([]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand(['--hide=sym_get']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const callToolCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'CallToolRequestSchema',
+        );
+        if (!callToolCall) throw new Error('CallTool handler not registered');
+        const handler = callToolCall[1] as (req: {
+            params: { name: string; arguments?: unknown };
+        }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+        // sym_get is hidden → rejected
+        const result = await handler({ params: { name: 'sym_get', arguments: {} } });
+        expect(result.isError).toBe(true);
+        expect(result.content[0]?.text).toContain('hidden');
+
+        void promise;
+    });
+
+    // ---------- Tool filter: config file integration ----------
+
+    it('config file tools.hidden is used when no CLI args', async () => {
+        // Execution order: config.json read first (for filters), then center.json (for bricks)
+        mockReadFile
+            .mockResolvedValueOnce(JSON.stringify({ tools: { hidden: ['sym_get'] } }))
+            .mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+            {
+                name: 'sym_get',
+                description: 'get',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).toContain('sym_find');
+        expect(names).not.toContain('sym_get'); // hidden by config file
+
+        void promise;
+    });
+
+    it('CLI --hide overrides config file hidden list', async () => {
+        // CLI --hide=ts_index is passed, so config.json is NOT read for filters
+        // center.json is absent
+        mockReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+            {
+                name: 'ts_index',
+                description: 'index',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand(['--hide=ts_index']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).toContain('sym_find');
+        expect(names).not.toContain('ts_index'); // hidden by CLI
+
+        void promise;
+    });
+
+    it('no filter (no CLI args, no config file) → all tools exposed', async () => {
+        // Both config.json and center.json absent — default: everything exposed
+        mockReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).toContain('sym_find');
+        expect(names).toContain('focus_list');
+
+        void promise;
     });
 });

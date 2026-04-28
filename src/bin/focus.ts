@@ -24,6 +24,12 @@ import { browseCommand } from '../commands/browse.ts';
 import { catalogCommand } from '../commands/catalog.ts';
 import type { DoctorIO } from '../commands/doctor.ts';
 import { doctorCommand, formatDoctorOutput } from '../commands/doctor.ts';
+import {
+    filterClearCommand,
+    filterHideCommand,
+    filterListCommand,
+    filterShowCommand,
+} from '../commands/filter.ts';
 import { infoCommand } from '../commands/info.ts';
 import { listCommand } from '../commands/list.ts';
 import { reinstallCommand } from '../commands/reinstall.ts';
@@ -50,7 +56,13 @@ Commands:
   doctor [--json] [--fix]      Audit local state and report actionable issues
                                --fix  auto-remediate corrupted installs and missing deps
   browse                       Interactive TUI to browse catalogs and bricks
-  start                        Launch FocusMCP as a stdio MCP server (AI clients attach here)
+  start [--hide=<patterns>]    Launch FocusMCP as a stdio MCP server (AI clients attach here)
+                               --hide=<patterns>    comma-separated patterns to hide (e.g. "sym_get,focus_*")
+  filter <action> [pattern]    Manage the tool hidden-list (persisted in ~/.focus/config.json)
+                                 hide <pattern>     hide a tool or glob (e.g. focus filter hide sym_get)
+                                 show <pattern>     unhide a tool or glob
+                                 list               show the current hidden list
+                                 clear              unhide all tools
   help                         Print this help
 
 Options:
@@ -307,6 +319,44 @@ async function runDoctor(rest: string[]): Promise<number> {
     return result.errors > 0 ? 1 : 0;
 }
 
+async function runFilter(rest: string[]): Promise<number> {
+    const sub = rest[0];
+    const pattern = rest[1];
+
+    if (sub === 'hide') {
+        if (!pattern) {
+            process.stderr.write('error: `focus filter hide <pattern>` requires a pattern.\n');
+            return 1;
+        }
+        process.stdout.write(`${await filterHideCommand(pattern)}\n`);
+        return 0;
+    }
+
+    if (sub === 'show') {
+        if (!pattern) {
+            process.stderr.write('error: `focus filter show <pattern>` requires a pattern.\n');
+            return 1;
+        }
+        process.stdout.write(`${await filterShowCommand(pattern)}\n`);
+        return 0;
+    }
+
+    if (sub === 'list' || sub === undefined) {
+        process.stdout.write(`${await filterListCommand()}\n`);
+        return 0;
+    }
+
+    if (sub === 'clear') {
+        process.stdout.write(`${await filterClearCommand()}\n`);
+        return 0;
+    }
+
+    process.stderr.write(
+        `error: unknown filter subcommand "${sub}". Use: hide, show, list, clear\n`,
+    );
+    return 1;
+}
+
 // ---------- main ----------
 
 async function main(argv: string[]): Promise<number> {
@@ -356,6 +406,8 @@ async function main(argv: string[]): Promise<number> {
             return runCatalog(rest);
         case 'doctor':
             return runDoctor(rest);
+        case 'filter':
+            return runFilter(rest);
         case 'browse':
             await browseCommand();
             return 0;

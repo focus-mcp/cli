@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 FocusMCP contributors
 // SPDX-License-Identifier: MIT
 
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -66,6 +66,33 @@ async function loadSingleBrick(brickName: string, bricksDir: string): Promise<Br
     return first;
 }
 
+/**
+ * Returns true if `toolName` matches the given glob pattern.
+ * Supports a single trailing `*` wildcard (e.g. `focus_*`).
+ * Falls back to exact equality for patterns without `*`.
+ */
+export function matchesPattern(toolName: string, pattern: string): boolean {
+    if (pattern.endsWith('*')) {
+        return toolName.startsWith(pattern.slice(0, -1));
+    }
+    return toolName === pattern;
+}
+
+/**
+ * Returns true when `toolName` is hidden by the given hidden-patterns list.
+ *
+ * Special case: `focus_filter` is always visible regardless of the hidden list,
+ * so the agent can always re-show hidden tools (avoids a deadlock situation).
+ *
+ * When `hiddenPatterns` is null (no filter configured), no tools are hidden.
+ */
+export function isHiddenTool(toolName: string, hiddenPatterns: string[] | null): boolean {
+    // focus_filter is immune — always visible
+    if (toolName === 'focus_filter') return false;
+    if (!hiddenPatterns) return false;
+    return hiddenPatterns.some((p) => matchesPattern(toolName, p));
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: startup wiring with multiple mode branches
 export async function startCommand(argv: string[] = []): Promise<void> {
     const { values } = parseArgs({
@@ -75,16 +102,73 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         options: {
             http: { type: 'boolean', default: false },
             port: { type: 'string', default: '3000' },
+            hide: { type: 'string' },
         },
     });
 
     const useHttp = values['http'] === true;
     const port = Number(values['port']);
+
     if (!Number.isFinite(port) || port < 1 || port > 65535) {
         throw new Error(`Invalid port: ${values['port']}. Must be 1-65535.`);
     }
 
     const focusDir = join(homedir(), '.focus');
+
+    // ------------------------------------------------------------------
+    // Resolve tool hidden-list: CLI arg takes priority over config file
+    // Precedence: --hide CLI arg > ~/.focus/config.json tools.hidden > null (nothing hidden)
+    // ------------------------------------------------------------------
+
+    /** Parse a comma-separated patterns string into a non-empty array, or null. */
+    function parsePatternArg(raw: string | undefined): string[] | null {
+        if (typeof raw !== 'string') return null;
+        const parts = raw
+            .split(',')
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+        return parts.length > 0 ? parts : null;
+    }
+
+    const cliHidden = parsePatternArg(
+        typeof values['hide'] === 'string' ? values['hide'] : undefined,
+    );
+
+    let fileHidden: string[] | null = null;
+    let filterSource = 'none';
+
+    if (cliHidden !== null) {
+        // CLI arg present — it overrides everything
+        filterSource = 'CLI args';
+    } else {
+        // Try ~/.focus/config.json
+        try {
+            const configRaw = await readFile(join(focusDir, 'config.json'), 'utf-8');
+            const configData = JSON.parse(configRaw) as unknown;
+            if (
+                configData !== null &&
+                typeof configData === 'object' &&
+                'tools' in configData &&
+                configData['tools'] !== null &&
+                typeof configData['tools'] === 'object'
+            ) {
+                const toolsSection = configData['tools'] as Record<string, unknown>;
+                if (Array.isArray(toolsSection['hidden'])) {
+                    const arr = (toolsSection['hidden'] as unknown[]).filter(
+                        (s): s is string => typeof s === 'string' && s.length > 0,
+                    );
+                    if (arr.length > 0) {
+                        fileHidden = arr;
+                        filterSource = join(focusDir, 'config.json');
+                    }
+                }
+            }
+        } catch {
+            // config.json absent or malformed — silently ignore
+        }
+    }
+
+    const hiddenPatterns: string[] | null = cliHidden ?? fileHidden;
     let bricks: Brick[] = [];
     const activeBricksDir = process.env['FOCUSMCP_BRICKS_DIR'] ?? join(focusDir, 'bricks');
 
@@ -127,6 +211,13 @@ export async function startCommand(argv: string[] = []): Promise<void> {
     // only the brick tools they are supposed to measure.
     const isBenchMode =
         process.env['FOCUS_BENCH_MODE'] === 'true' || process.env['FOCUS_BENCH_MODE'] === '1';
+
+    // Log hidden-tool filter details when a filter is active
+    if (hiddenPatterns !== null) {
+        process.stderr.write(
+            `FocusMCP tool filter:\n  source:  ${filterSource}\n  hidden:  ${hiddenPatterns.join(', ')}\n`,
+        );
+    }
 
     const metaTools = isBenchMode
         ? []
@@ -291,22 +382,65 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                       additionalProperties: false,
                   },
               },
+              {
+                  name: 'focus_filter',
+                  description:
+                      'Manage the tool hidden-list. Hide or show tools by name or glob pattern. ' +
+                      'Note: focus_filter itself is always visible regardless of the hidden list.',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          action: {
+                              type: 'string',
+                              enum: ['hide', 'show', 'list', 'clear'],
+                              description:
+                                  'hide: add pattern to hidden list; show: remove pattern; list: show current hidden list; clear: unhide all tools',
+                          },
+                          pattern: {
+                              type: 'string',
+                              description:
+                                  'Tool name or glob pattern (e.g. "sym_get" or "focus_*"). Required for hide/show.',
+                          },
+                      },
+                      required: ['action'],
+                      additionalProperties: false,
+                  },
+              },
           ];
 
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({
-        tools: [
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
+        const allTools = [
             ...focusMcp.router.listTools().map((t) => ({
                 name: t.name,
                 description: t.description,
                 inputSchema: t.inputSchema,
             })),
             ...metaTools,
-        ],
-    }));
+        ];
+        const filteredTools = allTools.filter((t) => !isHiddenTool(t.name, hiddenPatterns));
+        // Log the count once (only when a filter is active)
+        if (hiddenPatterns !== null) {
+            process.stderr.write(`  exposed: ${filteredTools.length} / ${allTools.length} tools\n`);
+        }
+        return { tools: filteredTools };
+    });
 
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: internal tool dispatch with multiple branches
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
         const { name, arguments: args } = req.params;
+
+        // Reject calls to tools that are in the hidden list
+        if (isHiddenTool(name, hiddenPatterns)) {
+            return {
+                content: [
+                    {
+                        type: 'text' as const,
+                        text: `Tool "${name}" is not available (hidden by tool filter). Use focus_filter to manage the hidden list.`,
+                    },
+                ],
+                isError: true,
+            };
+        }
 
         // Meta tools are disabled in bench mode — skip all focus_* handlers and
         // fall through to the brick router (which will return an unknown-tool error).
@@ -673,6 +807,147 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 }
             } // end focus_catalog_remove
         } // end !isBenchMode
+
+        // focus_filter is always handled regardless of bench mode and is immune to the hidden list
+        if (name === 'focus_filter') {
+            const rawArgs = args as Record<string, unknown> | undefined;
+            const action = rawArgs?.['action'];
+            const pattern = rawArgs?.['pattern'];
+
+            if (typeof action !== 'string') {
+                return {
+                    content: [{ type: 'text' as const, text: 'Missing or invalid action.' }],
+                    isError: true,
+                };
+            }
+
+            const configPath = join(focusDir, 'config.json');
+
+            /** Read current config, return {} if absent/malformed */
+            async function readConfig(): Promise<Record<string, unknown>> {
+                try {
+                    const raw = await readFile(configPath, 'utf-8');
+                    const parsed = JSON.parse(raw) as unknown;
+                    return typeof parsed === 'object' && parsed !== null
+                        ? (parsed as Record<string, unknown>)
+                        : {};
+                } catch {
+                    return {};
+                }
+            }
+
+            async function writeConfig(config: Record<string, unknown>): Promise<void> {
+                await mkdir(focusDir, { recursive: true });
+                await writeFile(configPath, JSON.stringify(config, null, 4), 'utf-8');
+            }
+
+            if (action === 'list') {
+                const config = await readConfig();
+                const toolsSection = config['tools'];
+                const hidden =
+                    toolsSection !== null &&
+                    typeof toolsSection === 'object' &&
+                    !Array.isArray(toolsSection) &&
+                    Array.isArray((toolsSection as Record<string, unknown>)['hidden'])
+                        ? ((toolsSection as Record<string, unknown>)['hidden'] as string[])
+                        : [];
+                const text =
+                    hidden.length === 0
+                        ? 'No tools are hidden. All tools are visible.'
+                        : `Hidden tools (${hidden.length}):\n${hidden.map((p) => `  - ${p}`).join('\n')}`;
+                return { content: [{ type: 'text' as const, text }] };
+            }
+
+            if (action === 'clear') {
+                const config = await readConfig();
+                const toolsSection =
+                    config['tools'] !== null &&
+                    typeof config['tools'] === 'object' &&
+                    !Array.isArray(config['tools'])
+                        ? (config['tools'] as Record<string, unknown>)
+                        : {};
+                toolsSection['hidden'] = [];
+                config['tools'] = toolsSection;
+                await writeConfig(config);
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: 'Hidden list cleared. All tools are now visible. Restart focus start to apply.',
+                        },
+                    ],
+                };
+            }
+
+            if (action === 'hide' || action === 'show') {
+                if (typeof pattern !== 'string' || pattern.trim() === '') {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Missing or invalid pattern for action "${action}".`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+                const config = await readConfig();
+                const toolsSection =
+                    config['tools'] !== null &&
+                    typeof config['tools'] === 'object' &&
+                    !Array.isArray(config['tools'])
+                        ? (config['tools'] as Record<string, unknown>)
+                        : {};
+                const existing = Array.isArray(toolsSection['hidden'])
+                    ? (toolsSection['hidden'] as string[])
+                    : [];
+
+                let updated: string[];
+                let message: string;
+                if (action === 'hide') {
+                    if (existing.includes(pattern)) {
+                        return {
+                            content: [
+                                {
+                                    type: 'text' as const,
+                                    text: `Pattern "${pattern}" is already in the hidden list.`,
+                                },
+                            ],
+                        };
+                    }
+                    updated = [...existing, pattern];
+                    message = `Pattern "${pattern}" added to hidden list. Restart focus start to apply.`;
+                } else {
+                    updated = existing.filter((p) => p !== pattern);
+                    if (updated.length === existing.length) {
+                        return {
+                            content: [
+                                {
+                                    type: 'text' as const,
+                                    text: `Pattern "${pattern}" was not in the hidden list.`,
+                                },
+                            ],
+                        };
+                    }
+                    message = `Pattern "${pattern}" removed from hidden list. Restart focus start to apply.`;
+                }
+
+                toolsSection['hidden'] = updated;
+                config['tools'] = toolsSection;
+                await writeConfig(config);
+                return { content: [{ type: 'text' as const, text: message }] };
+            }
+
+            return {
+                content: [
+                    {
+                        type: 'text' as const,
+                        text: `Unknown action "${action}". Valid actions: hide, show, list, clear.`,
+                    },
+                ],
+                isError: true,
+            };
+        } // end focus_filter
 
         // Brick tools (existing dispatch)
         try {
