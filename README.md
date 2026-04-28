@@ -136,45 +136,55 @@ focus start --hide="sym_get,ts_cleanup"
 Patterns support a trailing `*` glob (`focus_*` matches `focus_install`, `focus_list`, etc.).
 Exact names are also accepted.
 
-> **Note:** `focus_filter` is always visible regardless of the hidden list, so you can always
-> manage the hidden list from within your AI client.
+> **Note:** `focus_config` is always visible regardless of the hidden list, so you can always
+> manage tool visibility from within your AI client.
 
 ### Persistent config: `~/.focus/config.json`
 
-Add a `tools.hidden` list to hide tools across all sessions:
+Add a `tools` section to persist filters across sessions:
 
 ```json
 {
     "tools": {
-        "hidden": ["sym_get", "focus_remove"]
+        "hidden": ["sym_get", "fo_delete"],
+        "alwaysLoad": ["focus_list", "focus_search", "focus_install", "focus_load"]
     }
 }
 ```
 
-CLI `--hide` overrides the config file. If neither is set, all tools are exposed (default).
+CLI flags override the config file. If neither is set, all tools are exposed (default).
 
-### Manage the hidden list: `focus filter`
+Add `--pin=<patterns>` to mark tools as always-loaded (surfaced as `_meta.anthropic/alwaysLoad: true` in MCP responses):
 
 ```bash
-focus filter list              # show current hidden list
-focus filter hide sym_get      # add sym_get to the hidden list
-focus filter hide "focus_*"    # hide an entire family (glob)
-focus filter show sym_get      # remove sym_get from the hidden list
-focus filter clear             # unhide everything
+focus start --pin="focus_list,focus_search,focus_install,focus_load"
+```
+
+### Manage from the terminal: `focus config tools`
+
+```bash
+focus config tools list               # show current hidden + alwaysLoad lists
+focus config tools hide sym_get       # add sym_get to the hidden list
+focus config tools hide "focus_*"     # hide an entire family (glob)
+focus config tools show sym_get       # remove sym_get from the hidden list
+focus config tools pin focus_list     # mark focus_list as alwaysLoad
+focus config tools unpin focus_list   # remove focus_list from alwaysLoad
+focus config tools clear              # reset both lists
 ```
 
 Changes are written to `~/.focus/config.json` and take effect on the next `focus start`.
 
-### From your AI client: `focus_filter` MCP tool
+### From your AI client: `focus_config` MCP tool
 
-The `focus_filter` MCP tool mirrors the CLI subcommand — your AI agent can manage the hidden
-list directly:
+The `focus_config` MCP tool lets your AI agent manage tool visibility directly:
 
 ```
-focus_filter action=hide   pattern=sym_get
-focus_filter action=show   pattern=sym_get
-focus_filter action=list
-focus_filter action=clear
+focus_config action=tools.hide   pattern=sym_get
+focus_config action=tools.show   pattern=sym_get
+focus_config action=tools.pin    pattern=focus_list
+focus_config action=tools.unpin  pattern=focus_list
+focus_config action=tools.list
+focus_config action=tools.clear
 ```
 
 Restart `focus start` (or reload your MCP client) to apply changes.
