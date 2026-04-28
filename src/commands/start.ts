@@ -22,6 +22,7 @@ import { addCommand } from './add.ts';
 import { catalogCommand } from './catalog.ts';
 import { removeCommand } from './remove.ts';
 import { searchCommand } from './search.ts';
+import { upgradeCommand } from './upgrade.ts';
 
 /**
  * Enrich a start-time error message with actionable suggestions.
@@ -65,6 +66,7 @@ async function loadSingleBrick(brickName: string, bricksDir: string): Promise<Br
     return first;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: startup wiring with multiple mode branches
 export async function startCommand(argv: string[] = []): Promise<void> {
     const { values } = parseArgs({
         args: argv,
@@ -121,6 +123,176 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         { capabilities: { tools: {} } },
     );
 
+    // When FOCUS_BENCH_MODE=true (or 1), skip all meta tools so bench agents see
+    // only the brick tools they are supposed to measure.
+    const isBenchMode =
+        process.env['FOCUS_BENCH_MODE'] === 'true' || process.env['FOCUS_BENCH_MODE'] === '1';
+
+    const metaTools = isBenchMode
+        ? []
+        : [
+              {
+                  name: 'focus_list',
+                  description: 'List all loaded bricks and their tools',
+                  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+              },
+              {
+                  name: 'focus_load',
+                  description:
+                      'Load (activate) an installed brick — its tools become available immediately',
+                  inputSchema: {
+                      type: 'object',
+                      properties: { name: { type: 'string', description: 'Brick name to load' } },
+                      required: ['name'],
+                      additionalProperties: false,
+                  },
+              },
+              {
+                  name: 'focus_unload',
+                  description:
+                      'Unload (deactivate) a running brick — its tools are removed immediately',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          name: { type: 'string', description: 'Brick name to unload' },
+                      },
+                      required: ['name'],
+                      additionalProperties: false,
+                  },
+              },
+              {
+                  name: 'focus_reload',
+                  description:
+                      'Reload a brick — stop, reimport from disk, restart. Tools are updated immediately.',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          name: { type: 'string', description: 'Brick name to reload' },
+                      },
+                      required: ['name'],
+                      additionalProperties: false,
+                  },
+              },
+              {
+                  name: 'focus_search',
+                  description: 'Search the marketplace catalog for available bricks',
+                  inputSchema: {
+                      type: 'object',
+                      properties: { query: { type: 'string', description: 'Search query' } },
+                      required: ['query'],
+                      additionalProperties: false,
+                  },
+              },
+              {
+                  name: 'focus_install',
+                  description: 'Install a brick from the marketplace catalog',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          name: { type: 'string', description: 'Brick name to install' },
+                          version: {
+                              type: 'string',
+                              description: 'Version to install (optional)',
+                          },
+                      },
+                      required: ['name'],
+                      additionalProperties: false,
+                  },
+              },
+              {
+                  name: 'focus_remove',
+                  description: 'Remove an installed brick',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          name: { type: 'string', description: 'Brick name to remove' },
+                      },
+                      required: ['name'],
+                      additionalProperties: false,
+                  },
+              },
+              {
+                  name: 'focus_update',
+                  description: 'Update one or all installed bricks to their latest catalog version',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          brick: {
+                              type: 'string',
+                              description:
+                                  'Brick name to update (optional — updates all if omitted)',
+                          },
+                          all: {
+                              type: 'boolean',
+                              description:
+                                  'Update all installed bricks (default when brick is omitted)',
+                          },
+                          check: {
+                              type: 'boolean',
+                              description:
+                                  'Dry-run: list upgradable bricks without applying changes',
+                          },
+                      },
+                      additionalProperties: false,
+                  },
+              },
+              {
+                  name: 'focus_upgrade',
+                  description:
+                      'Upgrade one or all installed bricks to their latest catalog version (alias for focus_update)',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          brick: {
+                              type: 'string',
+                              description:
+                                  'Brick name to upgrade (optional — upgrades all if omitted)',
+                          },
+                          all: {
+                              type: 'boolean',
+                              description:
+                                  'Upgrade all installed bricks (default when brick is omitted)',
+                          },
+                          check: {
+                              type: 'boolean',
+                              description:
+                                  'Dry-run: list upgradable bricks without applying changes',
+                          },
+                      },
+                      additionalProperties: false,
+                  },
+              },
+              {
+                  name: 'focus_catalog_add',
+                  description: 'Add a catalog source URL',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          url: { type: 'string', description: 'Catalog source URL to add' },
+                      },
+                      required: ['url'],
+                      additionalProperties: false,
+                  },
+              },
+              {
+                  name: 'focus_catalog_list',
+                  description: 'List all configured catalog sources',
+                  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+              },
+              {
+                  name: 'focus_catalog_remove',
+                  description: 'Remove a catalog source URL',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          url: { type: 'string', description: 'Catalog source URL to remove' },
+                      },
+                      required: ['url'],
+                      additionalProperties: false,
+                  },
+              },
+          ];
+
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
         tools: [
             ...focusMcp.router.listTools().map((t) => ({
@@ -128,120 +300,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 description: t.description,
                 inputSchema: t.inputSchema,
             })),
-            {
-                name: 'focus_list',
-                description: 'List all loaded bricks and their tools',
-                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-            },
-            {
-                name: 'focus_load',
-                description:
-                    'Load (activate) an installed brick — its tools become available immediately',
-                inputSchema: {
-                    type: 'object',
-                    properties: { name: { type: 'string', description: 'Brick name to load' } },
-                    required: ['name'],
-                    additionalProperties: false,
-                },
-            },
-            {
-                name: 'focus_unload',
-                description:
-                    'Unload (deactivate) a running brick — its tools are removed immediately',
-                inputSchema: {
-                    type: 'object',
-                    properties: { name: { type: 'string', description: 'Brick name to unload' } },
-                    required: ['name'],
-                    additionalProperties: false,
-                },
-            },
-            {
-                name: 'focus_reload',
-                description:
-                    'Reload a brick — stop, reimport from disk, restart. Tools are updated immediately.',
-                inputSchema: {
-                    type: 'object',
-                    properties: { name: { type: 'string', description: 'Brick name to reload' } },
-                    required: ['name'],
-                    additionalProperties: false,
-                },
-            },
-            {
-                name: 'focus_search',
-                description: 'Search the marketplace catalog for available bricks',
-                inputSchema: {
-                    type: 'object',
-                    properties: { query: { type: 'string', description: 'Search query' } },
-                    required: ['query'],
-                    additionalProperties: false,
-                },
-            },
-            {
-                name: 'focus_install',
-                description: 'Install a brick from the marketplace catalog',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        name: { type: 'string', description: 'Brick name to install' },
-                        version: { type: 'string', description: 'Version to install (optional)' },
-                    },
-                    required: ['name'],
-                    additionalProperties: false,
-                },
-            },
-            {
-                name: 'focus_remove',
-                description: 'Remove an installed brick',
-                inputSchema: {
-                    type: 'object',
-                    properties: { name: { type: 'string', description: 'Brick name to remove' } },
-                    required: ['name'],
-                    additionalProperties: false,
-                },
-            },
-            {
-                name: 'focus_update',
-                description: 'Update an installed brick to the latest version',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        name: {
-                            type: 'string',
-                            description: 'Brick name to update (optional, updates all if omitted)',
-                        },
-                    },
-                    additionalProperties: false,
-                },
-            },
-            {
-                name: 'focus_catalog_add',
-                description: 'Add a catalog source URL',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        url: { type: 'string', description: 'Catalog source URL to add' },
-                    },
-                    required: ['url'],
-                    additionalProperties: false,
-                },
-            },
-            {
-                name: 'focus_catalog_list',
-                description: 'List all configured catalog sources',
-                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-            },
-            {
-                name: 'focus_catalog_remove',
-                description: 'Remove a catalog source URL',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        url: { type: 'string', description: 'Catalog source URL to remove' },
-                    },
-                    required: ['url'],
-                    additionalProperties: false,
-                },
-            },
+            ...metaTools,
         ],
     }));
 
@@ -249,326 +308,371 @@ export async function startCommand(argv: string[] = []): Promise<void> {
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
         const { name, arguments: args } = req.params;
 
-        // Internal tools — handled before dispatching to brick router
-        if (name === 'focus_list') {
-            const bricks = focusMcp.registry.getBricks();
-            if (bricks.length === 0) {
-                return { content: [{ type: 'text' as const, text: 'No bricks loaded.' }] };
-            }
-            const lines = bricks.map((b) => {
-                const status = focusMcp.registry.getStatus(b.manifest.name);
-                const toolNames = b.manifest.tools.map((t) => t.name).join(', ') || '(no tools)';
-                return `- ${b.manifest.name} [${status}]: ${toolNames}`;
-            });
-            return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
-        }
-
-        if (name === 'focus_load') {
-            const brickName = (args as Record<string, unknown>)?.['name'];
-            if (typeof brickName !== 'string' || brickName.trim() === '') {
-                return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid brick name.' }],
-                    isError: true,
-                };
-            }
-            if (focusMcp.registry.getBrick(brickName)) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Brick "${brickName}" is already loaded.`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-            try {
-                const brick = await loadSingleBrick(brickName, activeBricksDir);
-                focusMcp.registry.register(brick);
-                const ctx = { bus: focusMcp.bus, config: {}, logger: minimalLogger };
-                await brick.start(ctx);
-                focusMcp.registry.setStatus(brickName, 'running');
-                await server.sendToolListChanged();
-                const toolNames = brick.manifest.tools.map((t) => t.name).join(', ');
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Brick "${brickName}" loaded. Tools: ${toolNames}`,
-                        },
-                    ],
-                };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Failed to load "${brickName}": ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-        }
-
-        if (name === 'focus_unload') {
-            const brickName = (args as Record<string, unknown>)?.['name'];
-            if (typeof brickName !== 'string' || brickName.trim() === '') {
-                return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid brick name.' }],
-                    isError: true,
-                };
-            }
-            const brick = focusMcp.registry.getBrick(brickName);
-            if (!brick) {
-                return {
-                    content: [{ type: 'text' as const, text: `Brick "${brickName}" not found.` }],
-                    isError: true,
-                };
-            }
-            try {
-                await brick.stop();
-                focusMcp.registry.setStatus(brickName, 'stopped');
-                focusMcp.registry.unregister(brickName);
-                await server.sendToolListChanged();
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Brick "${brickName}" unloaded successfully.`,
-                        },
-                    ],
-                };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Failed to unload "${brickName}": ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-        }
-
-        if (name === 'focus_reload') {
-            const brickName = (args as Record<string, unknown>)?.['name'];
-            if (typeof brickName !== 'string' || brickName.trim() === '') {
-                return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid brick name.' }],
-                    isError: true,
-                };
-            }
-            const existing = focusMcp.registry.getBrick(brickName);
-            if (!existing) {
-                return {
-                    content: [{ type: 'text' as const, text: `Brick "${brickName}" not found.` }],
-                    isError: true,
-                };
-            }
-            try {
-                await existing.stop();
-                focusMcp.registry.unregister(brickName);
-                const brick = await loadSingleBrick(brickName, activeBricksDir);
-                focusMcp.registry.register(brick);
-                const ctx = { bus: focusMcp.bus, config: {}, logger: minimalLogger };
-                await brick.start(ctx);
-                focusMcp.registry.setStatus(brickName, 'running');
-                await server.sendToolListChanged();
-                const toolNames = brick.manifest.tools.map((t) => t.name).join(', ');
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Brick "${brickName}" reloaded. Tools: ${toolNames}`,
-                        },
-                    ],
-                };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Failed to reload "${brickName}": ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-        }
-
-        if (name === 'focus_search') {
-            const query = (args as Record<string, unknown>)?.['query'];
-            if (typeof query !== 'string') {
-                return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid query.' }],
-                    isError: true,
-                };
-            }
-            try {
-                const io = {
-                    fetch: new HttpFetchAdapter(),
-                    store: new FilesystemCatalogStoreAdapter(),
-                };
-                const result = await searchCommand({ query, io });
-                const text =
-                    result.errors.length > 0
-                        ? `${result.output}\n\nWarnings:\n${result.errors.join('\n')}`
-                        : result.output;
-                return { content: [{ type: 'text' as const, text }] };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Search failed: ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-        }
-
-        if (name === 'focus_install') {
-            const brickName = (args as Record<string, unknown>)?.['name'];
-            if (typeof brickName !== 'string' || brickName.trim() === '') {
-                return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid brick name.' }],
-                    isError: true,
-                };
-            }
-            try {
-                const io = {
-                    fetch: new HttpFetchAdapter(),
-                    store: new FilesystemCatalogStoreAdapter(),
-                    installer: new NpmInstallerAdapter(),
-                };
-                const result = await addCommand({ brickName, io });
-                return { content: [{ type: 'text' as const, text: result }] };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Install failed: ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-        }
-
-        if (name === 'focus_remove') {
-            const brickName = (args as Record<string, unknown>)?.['name'];
-            if (typeof brickName !== 'string' || brickName.trim() === '') {
-                return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid brick name.' }],
-                    isError: true,
-                };
-            }
-            try {
-                const io = { installer: new NpmInstallerAdapter() };
-                const result = await removeCommand({ brickName, io });
-                return { content: [{ type: 'text' as const, text: result }] };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Remove failed: ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-        }
-
-        if (name === 'focus_update') {
-            return {
-                content: [{ type: 'text' as const, text: 'focus_update: not yet implemented' }],
-            };
-        }
-
-        if (name === 'focus_catalog_add') {
-            const url = (args as Record<string, unknown>)?.['url'];
-            if (typeof url !== 'string' || url.trim() === '') {
-                return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid URL.' }],
-                    isError: true,
-                };
-            }
-            try {
-                const io = { store: new FilesystemCatalogStoreAdapter() };
-                // Derive a name from the URL (last path segment without extension)
-                const urlName =
-                    url
-                        .split('/')
-                        .filter(Boolean)
-                        .pop()
-                        ?.replace(/\.json$/i, '') ?? url;
-                const result = await catalogCommand({
-                    subcommand: 'add',
-                    url,
-                    name: urlName,
-                    io,
+        // Meta tools are disabled in bench mode — skip all focus_* handlers and
+        // fall through to the brick router (which will return an unknown-tool error).
+        if (!isBenchMode) {
+            // Internal tools — handled before dispatching to brick router
+            if (name === 'focus_list') {
+                const bricks = focusMcp.registry.getBricks();
+                if (bricks.length === 0) {
+                    return { content: [{ type: 'text' as const, text: 'No bricks loaded.' }] };
+                }
+                const lines = bricks.map((b) => {
+                    const status = focusMcp.registry.getStatus(b.manifest.name);
+                    const toolNames =
+                        b.manifest.tools.map((t) => t.name).join(', ') || '(no tools)';
+                    return `- ${b.manifest.name} [${status}]: ${toolNames}`;
                 });
-                return { content: [{ type: 'text' as const, text: result }] };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Catalog add failed: ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
+                return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
             }
-        }
 
-        if (name === 'focus_catalog_list') {
-            try {
-                const io = { store: new FilesystemCatalogStoreAdapter() };
-                const result = await catalogCommand({ subcommand: 'list', io });
-                return { content: [{ type: 'text' as const, text: result }] };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Catalog list failed: ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
+            if (name === 'focus_load') {
+                const brickName = (args as Record<string, unknown>)?.['name'];
+                if (typeof brickName !== 'string' || brickName.trim() === '') {
+                    return {
+                        content: [
+                            { type: 'text' as const, text: 'Missing or invalid brick name.' },
+                        ],
+                        isError: true,
+                    };
+                }
+                if (focusMcp.registry.getBrick(brickName)) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Brick "${brickName}" is already loaded.`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+                try {
+                    const brick = await loadSingleBrick(brickName, activeBricksDir);
+                    focusMcp.registry.register(brick);
+                    const ctx = { bus: focusMcp.bus, config: {}, logger: minimalLogger };
+                    await brick.start(ctx);
+                    focusMcp.registry.setStatus(brickName, 'running');
+                    await server.sendToolListChanged();
+                    const toolNames = brick.manifest.tools.map((t) => t.name).join(', ');
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Brick "${brickName}" loaded. Tools: ${toolNames}`,
+                            },
+                        ],
+                    };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Failed to load "${brickName}": ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
             }
-        }
 
-        if (name === 'focus_catalog_remove') {
-            const url = (args as Record<string, unknown>)?.['url'];
-            if (typeof url !== 'string' || url.trim() === '') {
-                return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid URL.' }],
-                    isError: true,
-                };
+            if (name === 'focus_unload') {
+                const brickName = (args as Record<string, unknown>)?.['name'];
+                if (typeof brickName !== 'string' || brickName.trim() === '') {
+                    return {
+                        content: [
+                            { type: 'text' as const, text: 'Missing or invalid brick name.' },
+                        ],
+                        isError: true,
+                    };
+                }
+                const brick = focusMcp.registry.getBrick(brickName);
+                if (!brick) {
+                    return {
+                        content: [
+                            { type: 'text' as const, text: `Brick "${brickName}" not found.` },
+                        ],
+                        isError: true,
+                    };
+                }
+                try {
+                    await brick.stop();
+                    focusMcp.registry.setStatus(brickName, 'stopped');
+                    focusMcp.registry.unregister(brickName);
+                    await server.sendToolListChanged();
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Brick "${brickName}" unloaded successfully.`,
+                            },
+                        ],
+                    };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Failed to unload "${brickName}": ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
             }
-            try {
-                const io = { store: new FilesystemCatalogStoreAdapter() };
-                const result = await catalogCommand({ subcommand: 'remove', url, io });
-                return { content: [{ type: 'text' as const, text: result }] };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `Catalog remove failed: ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
+
+            if (name === 'focus_reload') {
+                const brickName = (args as Record<string, unknown>)?.['name'];
+                if (typeof brickName !== 'string' || brickName.trim() === '') {
+                    return {
+                        content: [
+                            { type: 'text' as const, text: 'Missing or invalid brick name.' },
+                        ],
+                        isError: true,
+                    };
+                }
+                const existing = focusMcp.registry.getBrick(brickName);
+                if (!existing) {
+                    return {
+                        content: [
+                            { type: 'text' as const, text: `Brick "${brickName}" not found.` },
+                        ],
+                        isError: true,
+                    };
+                }
+                try {
+                    await existing.stop();
+                    focusMcp.registry.unregister(brickName);
+                    const brick = await loadSingleBrick(brickName, activeBricksDir);
+                    focusMcp.registry.register(brick);
+                    const ctx = { bus: focusMcp.bus, config: {}, logger: minimalLogger };
+                    await brick.start(ctx);
+                    focusMcp.registry.setStatus(brickName, 'running');
+                    await server.sendToolListChanged();
+                    const toolNames = brick.manifest.tools.map((t) => t.name).join(', ');
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Brick "${brickName}" reloaded. Tools: ${toolNames}`,
+                            },
+                        ],
+                    };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Failed to reload "${brickName}": ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
             }
-        }
+
+            if (name === 'focus_search') {
+                const query = (args as Record<string, unknown>)?.['query'];
+                if (typeof query !== 'string') {
+                    return {
+                        content: [{ type: 'text' as const, text: 'Missing or invalid query.' }],
+                        isError: true,
+                    };
+                }
+                try {
+                    const io = {
+                        fetch: new HttpFetchAdapter(),
+                        store: new FilesystemCatalogStoreAdapter(),
+                    };
+                    const result = await searchCommand({ query, io });
+                    const text =
+                        result.errors.length > 0
+                            ? `${result.output}\n\nWarnings:\n${result.errors.join('\n')}`
+                            : result.output;
+                    return { content: [{ type: 'text' as const, text }] };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Search failed: ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+            }
+
+            if (name === 'focus_install') {
+                const brickName = (args as Record<string, unknown>)?.['name'];
+                if (typeof brickName !== 'string' || brickName.trim() === '') {
+                    return {
+                        content: [
+                            { type: 'text' as const, text: 'Missing or invalid brick name.' },
+                        ],
+                        isError: true,
+                    };
+                }
+                try {
+                    const io = {
+                        fetch: new HttpFetchAdapter(),
+                        store: new FilesystemCatalogStoreAdapter(),
+                        installer: new NpmInstallerAdapter(),
+                    };
+                    const result = await addCommand({ brickName, io });
+                    return { content: [{ type: 'text' as const, text: result }] };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Install failed: ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+            }
+
+            if (name === 'focus_remove') {
+                const brickName = (args as Record<string, unknown>)?.['name'];
+                if (typeof brickName !== 'string' || brickName.trim() === '') {
+                    return {
+                        content: [
+                            { type: 'text' as const, text: 'Missing or invalid brick name.' },
+                        ],
+                        isError: true,
+                    };
+                }
+                try {
+                    const io = { installer: new NpmInstallerAdapter() };
+                    const result = await removeCommand({ brickName, io });
+                    return { content: [{ type: 'text' as const, text: result }] };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Remove failed: ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+            }
+
+            if (name === 'focus_update' || name === 'focus_upgrade') {
+                const rawArgs = args as Record<string, unknown> | undefined;
+                const brickName =
+                    typeof rawArgs?.['brick'] === 'string' ? rawArgs['brick'] : undefined;
+                const all = rawArgs?.['all'] === true;
+                const check = rawArgs?.['check'] === true;
+                try {
+                    const io = {
+                        fetch: new HttpFetchAdapter(),
+                        store: new FilesystemCatalogStoreAdapter(),
+                        installer: new NpmInstallerAdapter(),
+                    };
+                    const result = await upgradeCommand({
+                        ...(brickName !== undefined ? { brickName } : {}),
+                        all: all || brickName === undefined,
+                        check,
+                        io,
+                    });
+                    return { content: [{ type: 'text' as const, text: result.output }] };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `${name === 'focus_upgrade' ? 'Upgrade' : 'Update'} failed: ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+            }
+
+            if (name === 'focus_catalog_add') {
+                const url = (args as Record<string, unknown>)?.['url'];
+                if (typeof url !== 'string' || url.trim() === '') {
+                    return {
+                        content: [{ type: 'text' as const, text: 'Missing or invalid URL.' }],
+                        isError: true,
+                    };
+                }
+                try {
+                    const io = { store: new FilesystemCatalogStoreAdapter() };
+                    // Derive a name from the URL (last path segment without extension)
+                    const urlName =
+                        url
+                            .split('/')
+                            .filter(Boolean)
+                            .pop()
+                            ?.replace(/\.json$/i, '') ?? url;
+                    const result = await catalogCommand({
+                        subcommand: 'add',
+                        url,
+                        name: urlName,
+                        io,
+                    });
+                    return { content: [{ type: 'text' as const, text: result }] };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Catalog add failed: ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+            }
+
+            if (name === 'focus_catalog_list') {
+                try {
+                    const io = { store: new FilesystemCatalogStoreAdapter() };
+                    const result = await catalogCommand({ subcommand: 'list', io });
+                    return { content: [{ type: 'text' as const, text: result }] };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Catalog list failed: ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+            }
+
+            if (name === 'focus_catalog_remove') {
+                const url = (args as Record<string, unknown>)?.['url'];
+                if (typeof url !== 'string' || url.trim() === '') {
+                    return {
+                        content: [{ type: 'text' as const, text: 'Missing or invalid URL.' }],
+                        isError: true,
+                    };
+                }
+                try {
+                    const io = { store: new FilesystemCatalogStoreAdapter() };
+                    const result = await catalogCommand({ subcommand: 'remove', url, io });
+                    return { content: [{ type: 'text' as const, text: result }] };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Catalog remove failed: ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+            } // end focus_catalog_remove
+        } // end !isBenchMode
 
         // Brick tools (existing dispatch)
         try {

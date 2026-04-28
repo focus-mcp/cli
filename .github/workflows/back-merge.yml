@@ -1,0 +1,79 @@
+# SPDX-FileCopyrightText: 2026 FocusMCP contributors
+# SPDX-License-Identifier: MIT
+
+name: Back-merge main → develop
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: back-merge-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  back-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: develop
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check skip flag
+        id: check-skip
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if echo "$COMMIT_MSG" | grep -qF '[skip back-merge]'; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Attempt back-merge from main
+        id: merge
+        if: steps.check-skip.outputs.skip == 'false'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "merged=false" >> $GITHUB_OUTPUT
+            echo "Develop is already up to date with main — nothing to back-merge."
+            exit 0
+          fi
+          if git merge origin/main --no-edit -m "chore(back-merge): main → develop after release [skip ci]"; then
+            echo "merged=true" >> $GITHUB_OUTPUT
+          else
+            echo "merged=false" >> $GITHUB_OUTPUT
+            echo "::warning ::Back-merge failed (conflicts). A manual PR is required."
+            git merge --abort || true
+            exit 1
+          fi
+
+      - name: Push develop
+        if: steps.merge.outputs.merged == 'true'
+        run: git push origin develop
+
+      - name: Open PR if conflicts
+        if: failure() && steps.merge.outcome == 'failure'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+          base: develop
+          branch: chore/back-merge-main-${{ github.run_id }}
+          title: "chore: back-merge main → develop (manual conflict resolution required)"
+          body: |
+            Automatic back-merge from main failed due to conflicts. Resolve manually.
+          commit-message: "chore: open back-merge PR after auto-merge conflict"

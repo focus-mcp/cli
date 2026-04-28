@@ -348,6 +348,7 @@ async function main(argv: string[]): Promise<number> {
         case 'reinstall':
             return runReinstall(rest);
         case 'upgrade':
+        case 'update':
             return runUpgrade(rest);
         case 'search':
             return runSearch(rest);

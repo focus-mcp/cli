@@ -1,5 +1,11 @@
 # @focus-mcp/cli
 
+## 1.8.1
+
+### Patch Changes
+
+- 9d82945: feat(cli): FOCUS_BENCH_MODE env var skips meta tools (focus_list, focus_install, etc.) for benchmark isolation. Default behavior unchanged.
+
 ## 1.8.0
 
 ### Minor Changes
