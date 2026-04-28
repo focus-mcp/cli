@@ -30,6 +30,7 @@ const {
     mockAddCommand,
     mockRemoveCommand,
     mockCatalogCommand,
+    mockUpgradeCommand,
 } = vi.hoisted(() => {
     const mockListen = vi.fn();
     const mockOnce = vi.fn();
@@ -71,6 +72,12 @@ const {
         mockAddCommand: vi.fn().mockResolvedValue('installed ok'),
         mockRemoveCommand: vi.fn().mockResolvedValue('removed ok'),
         mockCatalogCommand: vi.fn().mockResolvedValue('catalog ok'),
+        mockUpgradeCommand: vi.fn().mockResolvedValue({
+            upgraded: 1,
+            upToDate: 0,
+            failed: 0,
+            output: 'echo: 1.0.0 → 2.0.0\n\n1 upgraded, 0 up-to-date, 0 failed',
+        }),
     };
 });
 
@@ -96,6 +103,7 @@ vi.mock('./search.ts', () => ({ searchCommand: mockSearchCommand }));
 vi.mock('./add.ts', () => ({ addCommand: mockAddCommand }));
 vi.mock('./remove.ts', () => ({ removeCommand: mockRemoveCommand }));
 vi.mock('./catalog.ts', () => ({ catalogCommand: mockCatalogCommand }));
+vi.mock('./upgrade.ts', () => ({ upgradeCommand: mockUpgradeCommand }));
 
 vi.mock('../adapters/catalog-store-adapter.ts', () => ({
     FilesystemCatalogStoreAdapter: vi.fn().mockImplementation(() => ({})),
@@ -188,6 +196,13 @@ describe('startCommand', () => {
         mockRegister.mockReset();
         mockSendToolListChanged.mockReset();
         mockSendToolListChanged.mockResolvedValue(undefined);
+        mockUpgradeCommand.mockReset();
+        mockUpgradeCommand.mockResolvedValue({
+            upgraded: 1,
+            upToDate: 0,
+            failed: 0,
+            output: 'echo: 1.0.0 → 2.0.0\n\n1 upgraded, 0 up-to-date, 0 failed',
+        });
     });
 
     afterEach(() => {
@@ -1717,7 +1732,14 @@ describe('startCommand', () => {
         });
 
         describe('focus_update', () => {
-            it('returns "not yet implemented" placeholder', async () => {
+            it('updates all bricks when called without arguments (happy path)', async () => {
+                mockUpgradeCommand.mockResolvedValue({
+                    upgraded: 2,
+                    upToDate: 1,
+                    failed: 0,
+                    output: 'echo: 1.0.0 → 2.0.0\ngit: 0.9.0 → 1.0.0\nfs — already at latest (3.0.0)\n\n2 upgraded, 1 up-to-date, 0 failed',
+                });
+
                 const { startCommand } = await import('./start.ts');
                 const promise = startCommand([]);
                 await new Promise((r) => setTimeout(r, 10));
@@ -1738,7 +1760,111 @@ describe('startCommand', () => {
                 });
 
                 expect(result.isError).toBeUndefined();
-                expect(result.content[0]?.text).toContain('not yet implemented');
+                expect(result.content[0]?.text).toContain('2 upgraded');
+                expect(mockUpgradeCommand).toHaveBeenCalledWith(
+                    expect.objectContaining({ all: true, check: false }),
+                );
+
+                void promise;
+            });
+
+            it('updates a specific brick when brick argument is provided', async () => {
+                mockUpgradeCommand.mockResolvedValue({
+                    upgraded: 1,
+                    upToDate: 0,
+                    failed: 0,
+                    output: 'echo: 1.0.0 → 2.0.0\n\n1 upgraded, 0 up-to-date, 0 failed',
+                });
+
+                const { startCommand } = await import('./start.ts');
+                const promise = startCommand([]);
+                await new Promise((r) => setTimeout(r, 10));
+
+                const callToolCall = mockSetRequestHandler.mock.calls.find(
+                    (call) => call[0] === 'CallToolRequestSchema',
+                );
+                if (!callToolCall) throw new Error('CallTool handler not registered');
+                const handler = callToolCall[1] as (req: {
+                    params: { name: string; arguments?: Record<string, unknown> };
+                }) => Promise<{
+                    content: Array<{ type: string; text: string }>;
+                    isError?: boolean;
+                }>;
+
+                const result = await handler({
+                    params: { name: 'focus_update', arguments: { brick: 'echo' } },
+                });
+
+                expect(result.isError).toBeUndefined();
+                expect(result.content[0]?.text).toContain('echo: 1.0.0 → 2.0.0');
+                expect(mockUpgradeCommand).toHaveBeenCalledWith(
+                    expect.objectContaining({ brickName: 'echo', check: false }),
+                );
+
+                void promise;
+            });
+
+            it('returns dry-run output when check=true (--check flag)', async () => {
+                mockUpgradeCommand.mockResolvedValue({
+                    upgraded: 1,
+                    upToDate: 0,
+                    failed: 0,
+                    output: 'echo: 1.0.0 → 2.0.0\n\n1 would upgrade, 0 up-to-date, 0 failed',
+                });
+
+                const { startCommand } = await import('./start.ts');
+                const promise = startCommand([]);
+                await new Promise((r) => setTimeout(r, 10));
+
+                const callToolCall = mockSetRequestHandler.mock.calls.find(
+                    (call) => call[0] === 'CallToolRequestSchema',
+                );
+                if (!callToolCall) throw new Error('CallTool handler not registered');
+                const handler = callToolCall[1] as (req: {
+                    params: { name: string; arguments?: Record<string, unknown> };
+                }) => Promise<{
+                    content: Array<{ type: string; text: string }>;
+                    isError?: boolean;
+                }>;
+
+                const result = await handler({
+                    params: { name: 'focus_update', arguments: { check: true } },
+                });
+
+                expect(result.isError).toBeUndefined();
+                expect(result.content[0]?.text).toContain('would upgrade');
+                expect(mockUpgradeCommand).toHaveBeenCalledWith(
+                    expect.objectContaining({ check: true }),
+                );
+
+                void promise;
+            });
+
+            it('returns isError when upgradeCommand throws', async () => {
+                mockUpgradeCommand.mockRejectedValue(new Error('no catalog source'));
+
+                const { startCommand } = await import('./start.ts');
+                const promise = startCommand([]);
+                await new Promise((r) => setTimeout(r, 10));
+
+                const callToolCall = mockSetRequestHandler.mock.calls.find(
+                    (call) => call[0] === 'CallToolRequestSchema',
+                );
+                if (!callToolCall) throw new Error('CallTool handler not registered');
+                const handler = callToolCall[1] as (req: {
+                    params: { name: string; arguments?: Record<string, unknown> };
+                }) => Promise<{
+                    content: Array<{ type: string; text: string }>;
+                    isError?: boolean;
+                }>;
+
+                const result = await handler({
+                    params: { name: 'focus_update', arguments: {} },
+                });
+
+                expect(result.isError).toBe(true);
+                expect(result.content[0]?.text).toContain('Update failed');
+                expect(result.content[0]?.text).toContain('no catalog source');
 
                 void promise;
             });
