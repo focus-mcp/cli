@@ -31,21 +31,13 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
           scope: '@focus-mcp'
-      - name: Compute dev version
-        id: version
+      - name: Apply changeset snapshot version
         run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || git rev-list --max-parents=0 HEAD)
-          DEV_NUM=$(git rev-list --count ${LAST_TAG}..HEAD)
-          BASE_VERSION=$(node -e "const p=require('./package.json'); console.log(p.version || '0.1.0')")
-          DEV_VERSION="${BASE_VERSION}-dev.${DEV_NUM}"
-          echo "version=${DEV_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Dev version: ${DEV_VERSION}"
-      - name: Set dev version
-        run: npm version "${DEV_VERSION}" --no-git-tag-version
-        env:
-          DEV_VERSION: ${{ steps.version.outputs.version }}
+          # Produces versions like 1.9.0-dev-20260428-abc1234 from pending changesets.
+          # Falls back gracefully when no changesets are pending (no-op).
+          pnpm changeset version --snapshot dev || true
       - run: pnpm build
       - name: Publish with dev tag
-        run: npm publish --tag dev --access public
+        run: pnpm changeset publish --no-git-tag --tag dev
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
