@@ -115,6 +115,70 @@ focus info echo       # Show details for a specific brick
 | `?` | Toggle help overlay |
 | `q` / `Esc` | Quit |
 
+## Filtering exposed tools
+
+By default, `focus start` exposes all tools from every loaded brick plus the focus management
+tools (`focus_*`). You can hide specific tools using a blacklist.
+
+### Per-launch: `--hide`
+
+```bash
+# Hide a single tool
+focus start --hide=sym_get
+
+# Hide an entire family with a glob
+focus start --hide="focus_*"
+
+# Hide multiple patterns (comma-separated)
+focus start --hide="sym_get,ts_cleanup"
+```
+
+Patterns support a trailing `*` glob (`focus_*` matches `focus_install`, `focus_list`, etc.).
+Exact names are also accepted.
+
+> **Note:** `focus_filter` is always visible regardless of the hidden list, so you can always
+> manage the hidden list from within your AI client.
+
+### Persistent config: `~/.focus/config.json`
+
+Add a `tools.hidden` list to hide tools across all sessions:
+
+```json
+{
+    "tools": {
+        "hidden": ["sym_get", "focus_remove"]
+    }
+}
+```
+
+CLI `--hide` overrides the config file. If neither is set, all tools are exposed (default).
+
+### Manage the hidden list: `focus filter`
+
+```bash
+focus filter list              # show current hidden list
+focus filter hide sym_get      # add sym_get to the hidden list
+focus filter hide "focus_*"    # hide an entire family (glob)
+focus filter show sym_get      # remove sym_get from the hidden list
+focus filter clear             # unhide everything
+```
+
+Changes are written to `~/.focus/config.json` and take effect on the next `focus start`.
+
+### From your AI client: `focus_filter` MCP tool
+
+The `focus_filter` MCP tool mirrors the CLI subcommand — your AI agent can manage the hidden
+list directly:
+
+```
+focus_filter action=hide   pattern=sym_get
+focus_filter action=show   pattern=sym_get
+focus_filter action=list
+focus_filter action=clear
+```
+
+Restart `focus start` (or reload your MCP client) to apply changes.
+
 ## Architecture
 
 ```
