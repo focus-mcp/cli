@@ -22,14 +22,16 @@ import { parseCenterJson, parseCenterLock } from '../center.ts';
 import { addManyCommand } from '../commands/add.ts';
 import { browseCommand } from '../commands/browse.ts';
 import { catalogCommand } from '../commands/catalog.ts';
+import {
+    configToolsClearCommand,
+    configToolsHideCommand,
+    configToolsListCommand,
+    configToolsPinCommand,
+    configToolsShowCommand,
+    configToolsUnpinCommand,
+} from '../commands/config.ts';
 import type { DoctorIO } from '../commands/doctor.ts';
 import { doctorCommand, formatDoctorOutput } from '../commands/doctor.ts';
-import {
-    filterClearCommand,
-    filterHideCommand,
-    filterListCommand,
-    filterShowCommand,
-} from '../commands/filter.ts';
 import { infoCommand } from '../commands/info.ts';
 import { listCommand } from '../commands/list.ts';
 import { reinstallCommand } from '../commands/reinstall.ts';
@@ -56,13 +58,16 @@ Commands:
   doctor [--json] [--fix]      Audit local state and report actionable issues
                                --fix  auto-remediate corrupted installs and missing deps
   browse                       Interactive TUI to browse catalogs and bricks
-  start [--hide=<patterns>]    Launch FocusMCP as a stdio MCP server (AI clients attach here)
+  start [options]              Launch FocusMCP as a stdio MCP server (AI clients attach here)
                                --hide=<patterns>    comma-separated patterns to hide (e.g. "sym_get,focus_*")
-  filter <action> [pattern]    Manage the tool hidden-list (persisted in ~/.focus/config.json)
-                                 hide <pattern>     hide a tool or glob (e.g. focus filter hide sym_get)
+                               --pin=<patterns>     comma-separated patterns to mark as alwaysLoad
+  config tools <action> [pat]  Manage tool visibility (persisted in ~/.focus/config.json)
+                                 hide <pattern>     hide a tool or glob (e.g. focus config tools hide sym_get)
                                  show <pattern>     unhide a tool or glob
-                                 list               show the current hidden list
-                                 clear              unhide all tools
+                                 pin <pattern>      mark as alwaysLoad
+                                 unpin <pattern>    remove from alwaysLoad
+                                 list               show hidden + alwaysLoad lists
+                                 clear              reset both lists
   help                         Print this help
 
 Options:
@@ -319,40 +324,73 @@ async function runDoctor(rest: string[]): Promise<number> {
     return result.errors > 0 ? 1 : 0;
 }
 
-async function runFilter(rest: string[]): Promise<number> {
-    const sub = rest[0];
-    const pattern = rest[1];
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: multi-branch CLI dispatch for config tools subcommands
+async function runConfig(rest: string[]): Promise<number> {
+    // Expect: ["tools", <action>, <pattern?>]
+    if (rest[0] !== 'tools') {
+        process.stderr.write(
+            `error: unknown config subcommand "${rest[0] ?? ''}". Use: focus config tools <action>\n`,
+        );
+        return 1;
+    }
 
-    if (sub === 'hide') {
+    const action = rest[1];
+    const pattern = rest[2];
+
+    if (action === 'hide') {
         if (!pattern) {
-            process.stderr.write('error: `focus filter hide <pattern>` requires a pattern.\n');
+            process.stderr.write(
+                'error: `focus config tools hide <pattern>` requires a pattern.\n',
+            );
             return 1;
         }
-        process.stdout.write(`${await filterHideCommand(pattern)}\n`);
+        process.stdout.write(`${await configToolsHideCommand(pattern)}\n`);
         return 0;
     }
 
-    if (sub === 'show') {
+    if (action === 'show') {
         if (!pattern) {
-            process.stderr.write('error: `focus filter show <pattern>` requires a pattern.\n');
+            process.stderr.write(
+                'error: `focus config tools show <pattern>` requires a pattern.\n',
+            );
             return 1;
         }
-        process.stdout.write(`${await filterShowCommand(pattern)}\n`);
+        process.stdout.write(`${await configToolsShowCommand(pattern)}\n`);
         return 0;
     }
 
-    if (sub === 'list' || sub === undefined) {
-        process.stdout.write(`${await filterListCommand()}\n`);
+    if (action === 'pin') {
+        if (!pattern) {
+            process.stderr.write('error: `focus config tools pin <pattern>` requires a pattern.\n');
+            return 1;
+        }
+        process.stdout.write(`${await configToolsPinCommand(pattern)}\n`);
         return 0;
     }
 
-    if (sub === 'clear') {
-        process.stdout.write(`${await filterClearCommand()}\n`);
+    if (action === 'unpin') {
+        if (!pattern) {
+            process.stderr.write(
+                'error: `focus config tools unpin <pattern>` requires a pattern.\n',
+            );
+            return 1;
+        }
+        process.stdout.write(`${await configToolsUnpinCommand(pattern)}\n`);
+        return 0;
+    }
+
+    if (action === 'list' || action === undefined) {
+        process.stdout.write(`${await configToolsListCommand()}\n`);
+        return 0;
+    }
+
+    if (action === 'clear') {
+        process.stdout.write(`${await configToolsClearCommand()}\n`);
         return 0;
     }
 
     process.stderr.write(
-        `error: unknown filter subcommand "${sub}". Use: hide, show, list, clear\n`,
+        `error: unknown action "${action}". Use: hide, show, pin, unpin, list, clear\n`,
     );
     return 1;
 }
@@ -406,8 +444,8 @@ async function main(argv: string[]): Promise<number> {
             return runCatalog(rest);
         case 'doctor':
             return runDoctor(rest);
-        case 'filter':
-            return runFilter(rest);
+        case 'config':
+            return runConfig(rest);
         case 'browse':
             await browseCommand();
             return 0;

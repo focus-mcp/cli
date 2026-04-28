@@ -323,7 +323,7 @@ describe('startCommand', () => {
         const handler = listToolsCall[1] as () => Promise<{ tools: unknown[] }>;
         const result = await handler();
 
-        // Should include the brick tool + 13 internal tools (12 management + focus_filter)
+        // Should include the brick tool + 13 internal tools (12 management + focus_config)
         expect(result.tools).toEqual(
             expect.arrayContaining([
                 {
@@ -343,7 +343,7 @@ describe('startCommand', () => {
                 expect.objectContaining({ name: 'focus_catalog_add' }),
                 expect.objectContaining({ name: 'focus_catalog_list' }),
                 expect.objectContaining({ name: 'focus_catalog_remove' }),
-                expect.objectContaining({ name: 'focus_filter' }),
+                expect.objectContaining({ name: 'focus_config' }),
             ]),
         );
         expect((result.tools as unknown[]).length).toBe(14);
@@ -2396,6 +2396,7 @@ describe('startCommand', () => {
                 'focus_catalog_add',
                 'focus_catalog_list',
                 'focus_catalog_remove',
+                'focus_config',
             ];
             for (const metaName of META_TOOL_NAMES) {
                 expect(names).toContain(metaName);
@@ -2440,10 +2441,10 @@ describe('startCommand', () => {
         expect(isHiddenTool('sym_find', ['focus_*', 'sym_*'])).toBe(true);
     });
 
-    it('isHiddenTool: focus_filter is immune (never hidden)', async () => {
+    it('isHiddenTool: focus_config is immune (never hidden)', async () => {
         const { isHiddenTool } = await import('./start.ts');
-        expect(isHiddenTool('focus_filter', ['focus_*'])).toBe(false);
-        expect(isHiddenTool('focus_filter', ['focus_filter'])).toBe(false);
+        expect(isHiddenTool('focus_config', ['focus_*'])).toBe(false);
+        expect(isHiddenTool('focus_config', ['focus_config'])).toBe(false);
     });
 
     // ---------- Tool filter: --hide CLI arg integration ----------
@@ -2481,7 +2482,7 @@ describe('startCommand', () => {
         void promise;
     });
 
-    it('--hide=focus_* hides focus_* but focus_filter stays visible', async () => {
+    it('--hide=focus_* hides focus_* but focus_config stays visible', async () => {
         mockListTools.mockReturnValue([]);
 
         const { startCommand } = await import('./start.ts');
@@ -2498,7 +2499,40 @@ describe('startCommand', () => {
         const names = result.tools.map((t) => t.name);
         expect(names).not.toContain('focus_list'); // hidden by focus_*
         expect(names).not.toContain('focus_install'); // hidden by focus_*
-        expect(names).toContain('focus_filter'); // immune — always visible
+        expect(names).toContain('focus_config'); // immune — always visible
+
+        void promise;
+    });
+
+    it('--pin=focus_list adds alwaysLoad hint to matching tools', async () => {
+        mockListTools.mockReturnValue([]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand(['--pin=focus_list']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{
+            tools: Array<Record<string, unknown>>;
+        }>;
+        const result = await handler();
+
+        const focusList = result.tools.find((t) => t['name'] === 'focus_list');
+        expect(focusList).toBeDefined();
+        // The _meta.anthropic/alwaysLoad hint should be set
+        const meta = focusList?.['_meta'] as Record<string, unknown> | undefined;
+        expect(meta?.['anthropic/alwaysLoad']).toBe(true);
+
+        // focus_search is NOT pinned by --pin=focus_list so it should NOT have the user pin
+        // (it already has alwaysLoad from metaTool default, but that is separate)
+        const focusInstall = result.tools.find((t) => t['name'] === 'focus_install');
+        expect(focusInstall).toBeDefined();
+        const installMeta = focusInstall?.['_meta'] as Record<string, unknown> | undefined;
+        // focus_install is in the server defaults (alwaysLoad=true), so it should still have it
+        expect(installMeta?.['anthropic/alwaysLoad']).toBe(true);
 
         void promise;
     });
@@ -2660,6 +2694,41 @@ describe('startCommand', () => {
         const names = result.tools.map((t) => t.name);
         expect(names).toContain('sym_find');
         expect(names).toContain('focus_list');
+
+        void promise;
+    });
+
+    it('config file tools.alwaysLoad adds alwaysLoad hint when no CLI args', async () => {
+        // config.json has alwaysLoad for sym_find; center.json absent
+        mockReadFile
+            .mockResolvedValueOnce(JSON.stringify({ tools: { alwaysLoad: ['sym_find'] } }))
+            .mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{
+            tools: Array<Record<string, unknown>>;
+        }>;
+        const result = await handler();
+
+        const symFind = result.tools.find((t) => t['name'] === 'sym_find');
+        expect(symFind).toBeDefined();
+        const meta = symFind?.['_meta'] as Record<string, unknown> | undefined;
+        expect(meta?.['anthropic/alwaysLoad']).toBe(true);
 
         void promise;
     });
