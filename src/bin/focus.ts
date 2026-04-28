@@ -54,20 +54,26 @@ Commands:
   reinstall <name> [...]       Force-reinstall (preserves enabled state; use after doctor)
   upgrade [name] [--all]       Re-install brick(s) at the latest catalog version
   search [query]               Search bricks in the catalog
-  catalog                      Manage catalog sources (add|remove|list)
+  catalog [list|add|remove]    Manage catalog sources (subcommand or catalog: namespace below)
+    catalog:list               List catalog sources
+    catalog:add <url> <name>   Add a catalog source
+    catalog:remove <url>       Remove a catalog source
   doctor [--json] [--fix]      Audit local state and report actionable issues
                                --fix  auto-remediate corrupted installs and missing deps
   browse                       Interactive TUI to browse catalogs and bricks
   start [options]              Launch FocusMCP as a stdio MCP server (AI clients attach here)
                                --hide=<patterns>    comma-separated patterns to hide (e.g. "sym_get,focus_*")
                                --pin=<patterns>     comma-separated patterns to mark as alwaysLoad
-  config tools <action> [pat]  Manage tool visibility (persisted in ~/.focus/config.json)
-                                 hide <pattern>     hide a tool or glob (e.g. focus config tools hide sym_get)
-                                 show <pattern>     unhide a tool or glob
-                                 pin <pattern>      mark as alwaysLoad
-                                 unpin <pattern>    remove from alwaysLoad
-                                 list               show hidden + alwaysLoad lists
-                                 clear              reset both lists
+
+  Tool visibility (tools: namespace):
+    tools:hide <pattern>       Hide a tool or glob (alias: filter hide)
+    tools:show <pattern>       Unhide a tool or glob (alias: filter show)
+    tools:pin <pattern>        Mark as alwaysLoad (_meta.anthropic/alwaysLoad: true)
+    tools:unpin <pattern>      Remove from alwaysLoad list
+    tools:list                 Show hidden + alwaysLoad lists (alias: filter list)
+    tools:clear                Reset both lists (alias: filter clear)
+    Legacy aliases: filter hide|show|list|clear  (permanent, no deprecation)
+
   help                         Print this help
 
 Options:
@@ -324,6 +330,68 @@ async function runDoctor(rest: string[]): Promise<number> {
     return result.errors > 0 ? 1 : 0;
 }
 
+/**
+ * `runTools` — shared handler for `focus tools:<action>` (Symfony canonical)
+ * and `focus filter <action>` (legacy alias, permanent).
+ *
+ * `rest` is [action, pattern?].
+ */
+async function runTools(rest: string[]): Promise<number> {
+    const action = rest[0];
+    const pattern = rest[1];
+
+    if (action === 'hide') {
+        if (!pattern) {
+            process.stderr.write('error: `focus tools:hide <pattern>` requires a pattern.\n');
+            return 1;
+        }
+        process.stdout.write(`${await configToolsHideCommand(pattern)}\n`);
+        return 0;
+    }
+
+    if (action === 'show') {
+        if (!pattern) {
+            process.stderr.write('error: `focus tools:show <pattern>` requires a pattern.\n');
+            return 1;
+        }
+        process.stdout.write(`${await configToolsShowCommand(pattern)}\n`);
+        return 0;
+    }
+
+    if (action === 'pin') {
+        if (!pattern) {
+            process.stderr.write('error: `focus tools:pin <pattern>` requires a pattern.\n');
+            return 1;
+        }
+        process.stdout.write(`${await configToolsPinCommand(pattern)}\n`);
+        return 0;
+    }
+
+    if (action === 'unpin') {
+        if (!pattern) {
+            process.stderr.write('error: `focus tools:unpin <pattern>` requires a pattern.\n');
+            return 1;
+        }
+        process.stdout.write(`${await configToolsUnpinCommand(pattern)}\n`);
+        return 0;
+    }
+
+    if (action === 'list' || action === undefined) {
+        process.stdout.write(`${await configToolsListCommand()}\n`);
+        return 0;
+    }
+
+    if (action === 'clear') {
+        process.stdout.write(`${await configToolsClearCommand()}\n`);
+        return 0;
+    }
+
+    process.stderr.write(
+        `error: unknown tools action "${action}". Use: hide, show, pin, unpin, list, clear\n`,
+    );
+    return 1;
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: multi-branch CLI dispatch for config tools subcommands
 async function runConfig(rest: string[]): Promise<number> {
     // Expect: ["tools", <action>, <pattern?>]
@@ -442,10 +510,33 @@ async function main(argv: string[]): Promise<number> {
             return runSearch(rest);
         case 'catalog':
             return runCatalog(rest);
+        // catalog: namespace — Symfony-style aliases (permanent)
+        case 'catalog:list':
+            return runCatalog(['list', ...rest]);
+        case 'catalog:add':
+            return runCatalog(['add', ...rest]);
+        case 'catalog:remove':
+            return runCatalog(['remove', ...rest]);
         case 'doctor':
             return runDoctor(rest);
         case 'config':
             return runConfig(rest);
+        // tools: namespace — canonical Symfony-style commands
+        case 'tools:hide':
+            return runTools(['hide', ...rest]);
+        case 'tools:show':
+            return runTools(['show', ...rest]);
+        case 'tools:pin':
+            return runTools(['pin', ...rest]);
+        case 'tools:unpin':
+            return runTools(['unpin', ...rest]);
+        case 'tools:list':
+            return runTools(['list', ...rest]);
+        case 'tools:clear':
+            return runTools(['clear', ...rest]);
+        // filter <action> [pattern] — legacy alias for tools: (permanent, no deprecation)
+        case 'filter':
+            return runTools(rest);
         case 'browse':
             await browseCommand();
             return 0;

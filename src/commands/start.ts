@@ -409,7 +409,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                   additionalProperties: false,
               }),
               // focus_config: always visible regardless of hidden list (immune to filtering)
-              // alwaysLoad hint ensures the agent never loses access to config management
+              // alwaysLoad hint ensures the agent never loses access to tool management
               metaTool(
                   'focus_config',
                   'Manage FocusMCP tool visibility. Hide/show tools by name or glob, pin tools as ' +
@@ -420,24 +420,17 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                       properties: {
                           action: {
                               type: 'string',
-                              enum: [
-                                  'tools.hide',
-                                  'tools.show',
-                                  'tools.pin',
-                                  'tools.unpin',
-                                  'tools.list',
-                                  'tools.clear',
-                              ],
+                              enum: ['hide', 'show', 'pin', 'unpin', 'list', 'clear'],
                               description:
-                                  'tools.hide: add to hidden list; tools.show: remove from hidden; ' +
-                                  'tools.pin: add to alwaysLoad; tools.unpin: remove from alwaysLoad; ' +
-                                  'tools.list: show both lists; tools.clear: reset both lists',
+                                  'hide: add to hidden list; show: remove from hidden; ' +
+                                  'pin: add to alwaysLoad; unpin: remove from alwaysLoad; ' +
+                                  'list: show both lists; clear: reset both lists',
                           },
                           pattern: {
                               type: 'string',
                               description:
                                   'Tool name or glob pattern (e.g. "sym_get" or "focus_*"). ' +
-                                  'Required for tools.hide / tools.show / tools.pin / tools.unpin.',
+                                  'Required for hide / show / pin / unpin.',
                           },
                       },
                       required: ['action'],
@@ -885,12 +878,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
             }
 
             // Actions that require a pattern
-            if (
-                action === 'tools.hide' ||
-                action === 'tools.show' ||
-                action === 'tools.pin' ||
-                action === 'tools.unpin'
-            ) {
+            if (action === 'hide' || action === 'show' || action === 'pin' || action === 'unpin') {
                 if (typeof pattern !== 'string' || pattern.trim() === '') {
                     return {
                         content: [
@@ -908,19 +896,18 @@ export async function startCommand(argv: string[] = []): Promise<void> {
             const safePattern = pattern ?? '';
             try {
                 let text: string;
-                if (action === 'tools.hide') text = await configToolsHideCommand(safePattern);
-                else if (action === 'tools.show') text = await configToolsShowCommand(safePattern);
-                else if (action === 'tools.pin') text = await configToolsPinCommand(safePattern);
-                else if (action === 'tools.unpin')
-                    text = await configToolsUnpinCommand(safePattern);
-                else if (action === 'tools.list') text = await configToolsListCommand();
-                else if (action === 'tools.clear') text = await configToolsClearCommand();
+                if (action === 'hide') text = await configToolsHideCommand(safePattern);
+                else if (action === 'show') text = await configToolsShowCommand(safePattern);
+                else if (action === 'pin') text = await configToolsPinCommand(safePattern);
+                else if (action === 'unpin') text = await configToolsUnpinCommand(safePattern);
+                else if (action === 'list') text = await configToolsListCommand();
+                else if (action === 'clear') text = await configToolsClearCommand();
                 else {
                     return {
                         content: [
                             {
                                 type: 'text' as const,
-                                text: `Unknown action "${action}". Valid actions: tools.hide, tools.show, tools.pin, tools.unpin, tools.list, tools.clear.`,
+                                text: `Unknown action "${action}". Valid actions: hide, show, pin, unpin, list, clear.`,
                             },
                         ],
                         isError: true,
