@@ -237,6 +237,32 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                   },
               },
               {
+                  name: 'focus_upgrade',
+                  description:
+                      'Upgrade one or all installed bricks to their latest catalog version (alias for focus_update)',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          brick: {
+                              type: 'string',
+                              description:
+                                  'Brick name to upgrade (optional — upgrades all if omitted)',
+                          },
+                          all: {
+                              type: 'boolean',
+                              description:
+                                  'Upgrade all installed bricks (default when brick is omitted)',
+                          },
+                          check: {
+                              type: 'boolean',
+                              description:
+                                  'Dry-run: list upgradable bricks without applying changes',
+                          },
+                      },
+                      additionalProperties: false,
+                  },
+              },
+              {
                   name: 'focus_catalog_add',
                   description: 'Add a catalog source URL',
                   inputSchema: {
@@ -535,7 +561,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 }
             }
 
-            if (name === 'focus_update') {
+            if (name === 'focus_update' || name === 'focus_upgrade') {
                 const rawArgs = args as Record<string, unknown> | undefined;
                 const brickName =
                     typeof rawArgs?.['brick'] === 'string' ? rawArgs['brick'] : undefined;
@@ -559,7 +585,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                         content: [
                             {
                                 type: 'text' as const,
-                                text: `Update failed: ${err instanceof Error ? err.message : String(err)}`,
+                                text: `${name === 'focus_upgrade' ? 'Upgrade' : 'Update'} failed: ${err instanceof Error ? err.message : String(err)}`,
                             },
                         ],
                         isError: true,

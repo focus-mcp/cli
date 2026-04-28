@@ -323,7 +323,7 @@ describe('startCommand', () => {
         const handler = listToolsCall[1] as () => Promise<{ tools: unknown[] }>;
         const result = await handler();
 
-        // Should include the brick tool + 11 internal tools
+        // Should include the brick tool + 12 internal tools
         expect(result.tools).toEqual(
             expect.arrayContaining([
                 {
@@ -339,12 +339,13 @@ describe('startCommand', () => {
                 expect.objectContaining({ name: 'focus_install' }),
                 expect.objectContaining({ name: 'focus_remove' }),
                 expect.objectContaining({ name: 'focus_update' }),
+                expect.objectContaining({ name: 'focus_upgrade' }),
                 expect.objectContaining({ name: 'focus_catalog_add' }),
                 expect.objectContaining({ name: 'focus_catalog_list' }),
                 expect.objectContaining({ name: 'focus_catalog_remove' }),
             ]),
         );
-        expect((result.tools as unknown[]).length).toBe(12);
+        expect((result.tools as unknown[]).length).toBe(13);
 
         void promise;
     });
@@ -1870,6 +1871,109 @@ describe('startCommand', () => {
             });
         });
 
+        describe('focus_upgrade', () => {
+            it('upgrades all bricks when called without arguments (happy path)', async () => {
+                mockUpgradeCommand.mockResolvedValue({
+                    upgraded: 1,
+                    upToDate: 0,
+                    failed: 0,
+                    output: 'echo: 1.0.0 → 2.0.0\n\n1 upgraded, 0 up-to-date, 0 failed',
+                });
+
+                const { startCommand } = await import('./start.ts');
+                const promise = startCommand([]);
+                await new Promise((r) => setTimeout(r, 10));
+
+                const callToolCall = mockSetRequestHandler.mock.calls.find(
+                    (call) => call[0] === 'CallToolRequestSchema',
+                );
+                if (!callToolCall) throw new Error('CallTool handler not registered');
+                const handler = callToolCall[1] as (req: {
+                    params: { name: string; arguments?: Record<string, unknown> };
+                }) => Promise<{
+                    content: Array<{ type: string; text: string }>;
+                    isError?: boolean;
+                }>;
+
+                const result = await handler({
+                    params: { name: 'focus_upgrade', arguments: {} },
+                });
+
+                expect(result.isError).toBeUndefined();
+                expect(result.content[0]?.text).toContain('1 upgraded');
+                expect(mockUpgradeCommand).toHaveBeenCalledWith(
+                    expect.objectContaining({ all: true, check: false }),
+                );
+
+                void promise;
+            });
+
+            it('returns dry-run output when check=true (--check flag)', async () => {
+                mockUpgradeCommand.mockResolvedValue({
+                    upgraded: 1,
+                    upToDate: 0,
+                    failed: 0,
+                    output: 'echo: 1.0.0 → 2.0.0\n\n1 would upgrade, 0 up-to-date, 0 failed',
+                });
+
+                const { startCommand } = await import('./start.ts');
+                const promise = startCommand([]);
+                await new Promise((r) => setTimeout(r, 10));
+
+                const callToolCall = mockSetRequestHandler.mock.calls.find(
+                    (call) => call[0] === 'CallToolRequestSchema',
+                );
+                if (!callToolCall) throw new Error('CallTool handler not registered');
+                const handler = callToolCall[1] as (req: {
+                    params: { name: string; arguments?: Record<string, unknown> };
+                }) => Promise<{
+                    content: Array<{ type: string; text: string }>;
+                    isError?: boolean;
+                }>;
+
+                const result = await handler({
+                    params: { name: 'focus_upgrade', arguments: { check: true } },
+                });
+
+                expect(result.isError).toBeUndefined();
+                expect(result.content[0]?.text).toContain('would upgrade');
+                expect(mockUpgradeCommand).toHaveBeenCalledWith(
+                    expect.objectContaining({ check: true }),
+                );
+
+                void promise;
+            });
+
+            it('returns isError when upgradeCommand throws', async () => {
+                mockUpgradeCommand.mockRejectedValue(new Error('no catalog source'));
+
+                const { startCommand } = await import('./start.ts');
+                const promise = startCommand([]);
+                await new Promise((r) => setTimeout(r, 10));
+
+                const callToolCall = mockSetRequestHandler.mock.calls.find(
+                    (call) => call[0] === 'CallToolRequestSchema',
+                );
+                if (!callToolCall) throw new Error('CallTool handler not registered');
+                const handler = callToolCall[1] as (req: {
+                    params: { name: string; arguments?: Record<string, unknown> };
+                }) => Promise<{
+                    content: Array<{ type: string; text: string }>;
+                    isError?: boolean;
+                }>;
+
+                const result = await handler({
+                    params: { name: 'focus_upgrade', arguments: {} },
+                });
+
+                expect(result.isError).toBe(true);
+                expect(result.content[0]?.text).toContain('Upgrade failed');
+                expect(result.content[0]?.text).toContain('no catalog source');
+
+                void promise;
+            });
+        });
+
         describe('focus_catalog_add', () => {
             it('adds a catalog source and returns success', async () => {
                 mockCatalogCommand.mockResolvedValue(
@@ -2238,6 +2342,7 @@ describe('startCommand', () => {
                 'focus_install',
                 'focus_remove',
                 'focus_update',
+                'focus_upgrade',
                 'focus_catalog_add',
                 'focus_catalog_list',
                 'focus_catalog_remove',
@@ -2283,6 +2388,7 @@ describe('startCommand', () => {
                 'focus_install',
                 'focus_remove',
                 'focus_update',
+                'focus_upgrade',
                 'focus_catalog_add',
                 'focus_catalog_list',
                 'focus_catalog_remove',
