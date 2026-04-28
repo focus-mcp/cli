@@ -284,7 +284,7 @@ export async function addManyCommand({
             if (!force) {
                 const ver = centerJson.bricks[brickName]?.version ?? 'unknown';
                 messages.push(
-                    `Brick "${brickName}" is already installed (version ${ver}). Use \`focus update\` to upgrade.`,
+                    `Brick "${brickName}" is already installed (version ${ver}). Use \`focus upgrade\` (or \`focus update\`) to upgrade.`,
                 );
                 continue;
             }
