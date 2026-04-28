@@ -22,6 +22,7 @@ import { addCommand } from './add.ts';
 import { catalogCommand } from './catalog.ts';
 import { removeCommand } from './remove.ts';
 import { searchCommand } from './search.ts';
+import { upgradeCommand } from './upgrade.ts';
 
 /**
  * Enrich a start-time error message with actionable suggestions.
@@ -212,14 +213,50 @@ export async function startCommand(argv: string[] = []): Promise<void> {
               },
               {
                   name: 'focus_update',
-                  description: 'Update an installed brick to the latest version',
+                  description: 'Update one or all installed bricks to their latest catalog version',
                   inputSchema: {
                       type: 'object',
                       properties: {
-                          name: {
+                          brick: {
                               type: 'string',
                               description:
-                                  'Brick name to update (optional, updates all if omitted)',
+                                  'Brick name to update (optional — updates all if omitted)',
+                          },
+                          all: {
+                              type: 'boolean',
+                              description:
+                                  'Update all installed bricks (default when brick is omitted)',
+                          },
+                          check: {
+                              type: 'boolean',
+                              description:
+                                  'Dry-run: list upgradable bricks without applying changes',
+                          },
+                      },
+                      additionalProperties: false,
+                  },
+              },
+              {
+                  name: 'focus_upgrade',
+                  description:
+                      'Upgrade one or all installed bricks to their latest catalog version (alias for focus_update)',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          brick: {
+                              type: 'string',
+                              description:
+                                  'Brick name to upgrade (optional — upgrades all if omitted)',
+                          },
+                          all: {
+                              type: 'boolean',
+                              description:
+                                  'Upgrade all installed bricks (default when brick is omitted)',
+                          },
+                          check: {
+                              type: 'boolean',
+                              description:
+                                  'Dry-run: list upgradable bricks without applying changes',
                           },
                       },
                       additionalProperties: false,
@@ -524,10 +561,36 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 }
             }
 
-            if (name === 'focus_update') {
-                return {
-                    content: [{ type: 'text' as const, text: 'focus_update: not yet implemented' }],
-                };
+            if (name === 'focus_update' || name === 'focus_upgrade') {
+                const rawArgs = args as Record<string, unknown> | undefined;
+                const brickName =
+                    typeof rawArgs?.['brick'] === 'string' ? rawArgs['brick'] : undefined;
+                const all = rawArgs?.['all'] === true;
+                const check = rawArgs?.['check'] === true;
+                try {
+                    const io = {
+                        fetch: new HttpFetchAdapter(),
+                        store: new FilesystemCatalogStoreAdapter(),
+                        installer: new NpmInstallerAdapter(),
+                    };
+                    const result = await upgradeCommand({
+                        ...(brickName !== undefined ? { brickName } : {}),
+                        all: all || brickName === undefined,
+                        check,
+                        io,
+                    });
+                    return { content: [{ type: 'text' as const, text: result.output }] };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `${name === 'focus_upgrade' ? 'Upgrade' : 'Update'} failed: ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
             }
 
             if (name === 'focus_catalog_add') {
