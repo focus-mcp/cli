@@ -89,14 +89,14 @@ export function matchesPattern(toolName: string, pattern: string): boolean {
 /**
  * Returns true when `toolName` is hidden by the given hidden-patterns list.
  *
- * Special case: `focus_config` is always visible regardless of the hidden list,
+ * Special case: `focus_tools` is always visible regardless of the hidden list,
  * so the agent can always re-manage the config (avoids a deadlock situation).
  *
  * When `hiddenPatterns` is null (no filter configured), no tools are hidden.
  */
 export function isHiddenTool(toolName: string, hiddenPatterns: string[] | null): boolean {
-    // focus_config is immune — always visible
-    if (toolName === 'focus_config') return false;
+    // focus_tools is immune — always visible
+    if (toolName === 'focus_tools') return false;
     if (!hiddenPatterns) return false;
     return hiddenPatterns.some((p) => matchesPattern(toolName, p));
 }
@@ -408,12 +408,12 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                   required: ['url'],
                   additionalProperties: false,
               }),
-              // focus_config: always visible regardless of hidden list (immune to filtering)
+              // focus_tools: always visible regardless of hidden list (immune to filtering)
               // alwaysLoad hint ensures the agent never loses access to tool management
               metaTool(
-                  'focus_config',
+                  'focus_tools',
                   'Manage FocusMCP tool visibility. Hide/show tools by name or glob, pin tools as ' +
-                      'alwaysLoad, or list/clear the config. Note: focus_config itself is always ' +
+                      'alwaysLoad, or list/clear the config. Note: focus_tools itself is always ' +
                       'visible regardless of the hidden list.',
                   {
                       type: 'object',
@@ -490,7 +490,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 content: [
                     {
                         type: 'text' as const,
-                        text: `Tool "${name}" is not available (hidden by tool filter). Use focus_config to manage the hidden list.`,
+                        text: `Tool "${name}" is not available (hidden by tool filter). Use focus_tools to manage the hidden list.`,
                     },
                 ],
                 isError: true,
@@ -863,8 +863,8 @@ export async function startCommand(argv: string[] = []): Promise<void> {
             } // end focus_catalog_remove
         } // end !isBenchMode
 
-        // focus_config is always handled regardless of bench mode and is immune to the hidden list
-        if (name === 'focus_config') {
+        // focus_tools is always handled regardless of bench mode and is immune to the hidden list
+        if (name === 'focus_tools') {
             const rawArgs = args as Record<string, unknown> | undefined;
             const action = rawArgs?.['action'];
             const pattern =
@@ -919,13 +919,13 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                     content: [
                         {
                             type: 'text' as const,
-                            text: `focus_config failed: ${err instanceof Error ? err.message : String(err)}`,
+                            text: `focus_tools failed: ${err instanceof Error ? err.message : String(err)}`,
                         },
                     ],
                     isError: true,
                 };
             }
-        } // end focus_config
+        } // end focus_tools
 
         // Brick tools (existing dispatch)
         try {
