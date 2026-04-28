@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 FocusMCP contributors
 // SPDX-License-Identifier: MIT
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -20,6 +20,14 @@ import { parseCenterJson } from '../center.ts';
 import { FilesystemBrickSource } from '../source/filesystem-source.ts';
 import { addCommand } from './add.ts';
 import { catalogCommand } from './catalog.ts';
+import {
+    configToolsClearCommand,
+    configToolsHideCommand,
+    configToolsListCommand,
+    configToolsPinCommand,
+    configToolsShowCommand,
+    configToolsUnpinCommand,
+} from './config.ts';
 import { removeCommand } from './remove.ts';
 import { searchCommand } from './search.ts';
 import { upgradeCommand } from './upgrade.ts';
@@ -81,14 +89,14 @@ export function matchesPattern(toolName: string, pattern: string): boolean {
 /**
  * Returns true when `toolName` is hidden by the given hidden-patterns list.
  *
- * Special case: `focus_filter` is always visible regardless of the hidden list,
- * so the agent can always re-show hidden tools (avoids a deadlock situation).
+ * Special case: `focus_tools` is always visible regardless of the hidden list,
+ * so the agent can always re-manage the config (avoids a deadlock situation).
  *
  * When `hiddenPatterns` is null (no filter configured), no tools are hidden.
  */
 export function isHiddenTool(toolName: string, hiddenPatterns: string[] | null): boolean {
-    // focus_filter is immune — always visible
-    if (toolName === 'focus_filter') return false;
+    // focus_tools is immune — always visible
+    if (toolName === 'focus_tools') return false;
     if (!hiddenPatterns) return false;
     return hiddenPatterns.some((p) => matchesPattern(toolName, p));
 }
@@ -103,6 +111,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
             http: { type: 'boolean', default: false },
             port: { type: 'string', default: '3000' },
             hide: { type: 'string' },
+            pin: { type: 'string' },
         },
     });
 
@@ -116,8 +125,8 @@ export async function startCommand(argv: string[] = []): Promise<void> {
     const focusDir = join(homedir(), '.focus');
 
     // ------------------------------------------------------------------
-    // Resolve tool hidden-list: CLI arg takes priority over config file
-    // Precedence: --hide CLI arg > ~/.focus/config.json tools.hidden > null (nothing hidden)
+    // Resolve tool visibility lists: CLI args take priority over config file
+    // Precedence (per list): CLI arg > ~/.focus/config.json tools.<list> > null
     // ------------------------------------------------------------------
 
     /** Parse a comma-separated patterns string into a non-empty array, or null. */
@@ -133,15 +142,16 @@ export async function startCommand(argv: string[] = []): Promise<void> {
     const cliHidden = parsePatternArg(
         typeof values['hide'] === 'string' ? values['hide'] : undefined,
     );
+    const cliAlwaysLoad = parsePatternArg(
+        typeof values['pin'] === 'string' ? values['pin'] : undefined,
+    );
 
     let fileHidden: string[] | null = null;
+    let fileAlwaysLoad: string[] | null = null;
     let filterSource = 'none';
 
-    if (cliHidden !== null) {
-        // CLI arg present — it overrides everything
-        filterSource = 'CLI args';
-    } else {
-        // Try ~/.focus/config.json
+    if (cliHidden === null && cliAlwaysLoad === null) {
+        // No CLI args — try ~/.focus/config.json
         try {
             const configRaw = await readFile(join(focusDir, 'config.json'), 'utf-8');
             const configData = JSON.parse(configRaw) as unknown;
@@ -153,22 +163,30 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 typeof configData['tools'] === 'object'
             ) {
                 const toolsSection = configData['tools'] as Record<string, unknown>;
-                if (Array.isArray(toolsSection['hidden'])) {
-                    const arr = (toolsSection['hidden'] as unknown[]).filter(
+
+                const parseArr = (key: string): string[] | null => {
+                    if (!Array.isArray(toolsSection[key])) return null;
+                    const arr = (toolsSection[key] as unknown[]).filter(
                         (s): s is string => typeof s === 'string' && s.length > 0,
                     );
-                    if (arr.length > 0) {
-                        fileHidden = arr;
-                        filterSource = join(focusDir, 'config.json');
-                    }
+                    return arr.length > 0 ? arr : null;
+                };
+
+                fileHidden = parseArr('hidden');
+                fileAlwaysLoad = parseArr('alwaysLoad');
+                if (fileHidden !== null || fileAlwaysLoad !== null) {
+                    filterSource = join(focusDir, 'config.json');
                 }
             }
         } catch {
             // config.json absent or malformed — silently ignore
         }
+    } else {
+        filterSource = 'CLI args';
     }
 
     const hiddenPatterns: string[] | null = cliHidden ?? fileHidden;
+    const alwaysLoadPatterns: string[] | null = cliAlwaysLoad ?? fileAlwaysLoad;
     let bricks: Brick[] = [];
     const activeBricksDir = process.env['FOCUSMCP_BRICKS_DIR'] ?? join(focusDir, 'bricks');
 
@@ -212,37 +230,57 @@ export async function startCommand(argv: string[] = []): Promise<void> {
     const isBenchMode =
         process.env['FOCUS_BENCH_MODE'] === 'true' || process.env['FOCUS_BENCH_MODE'] === '1';
 
-    // Log hidden-tool filter details when a filter is active
-    if (hiddenPatterns !== null) {
+    // Log filter details when any filter is active
+    if (hiddenPatterns !== null || alwaysLoadPatterns !== null) {
+        const hiddenLine = hiddenPatterns?.join(', ') ?? '(none)';
+        const alwaysLoadLine = alwaysLoadPatterns?.join(', ') ?? '(none)';
         process.stderr.write(
-            `FocusMCP tool filter:\n  source:  ${filterSource}\n  hidden:  ${hiddenPatterns.join(', ')}\n`,
+            `FocusMCP tool filter:\n  source:     ${filterSource}\n  hidden:     ${hiddenLine}\n  alwaysLoad: ${alwaysLoadLine}\n`,
         );
+    }
+
+    /**
+     * Build a tool descriptor, optionally injecting _meta.anthropic/alwaysLoad.
+     * The _meta annotation is a hint to MCP clients (e.g. Claude Code) to keep
+     * this tool always loaded regardless of their deferred-loading strategy.
+     */
+    function metaTool(
+        name: string,
+        description: string,
+        inputSchema: Record<string, unknown>,
+        alwaysLoadHint = false,
+    ): Record<string, unknown> {
+        const base: Record<string, unknown> = { name, description, inputSchema };
+        if (alwaysLoadHint) {
+            base['_meta'] = { 'anthropic/alwaysLoad': true };
+        }
+        return base;
     }
 
     const metaTools = isBenchMode
         ? []
         : [
-              {
-                  name: 'focus_list',
-                  description: 'List all loaded bricks and their tools',
-                  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-              },
-              {
-                  name: 'focus_load',
-                  description:
-                      'Load (activate) an installed brick — its tools become available immediately',
-                  inputSchema: {
+              metaTool(
+                  'focus_list',
+                  'List all loaded bricks and their tools',
+                  { type: 'object', properties: {}, additionalProperties: false },
+                  true,
+              ),
+              metaTool(
+                  'focus_load',
+                  'Load (activate) an installed brick — its tools become available immediately',
+                  {
                       type: 'object',
                       properties: { name: { type: 'string', description: 'Brick name to load' } },
                       required: ['name'],
                       additionalProperties: false,
                   },
-              },
-              {
-                  name: 'focus_unload',
-                  description:
-                      'Unload (deactivate) a running brick — its tools are removed immediately',
-                  inputSchema: {
+                  true,
+              ),
+              metaTool(
+                  'focus_unload',
+                  'Unload (deactivate) a running brick — its tools are removed immediately',
+                  {
                       type: 'object',
                       properties: {
                           name: { type: 'string', description: 'Brick name to unload' },
@@ -250,12 +288,11 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                       required: ['name'],
                       additionalProperties: false,
                   },
-              },
-              {
-                  name: 'focus_reload',
-                  description:
-                      'Reload a brick — stop, reimport from disk, restart. Tools are updated immediately.',
-                  inputSchema: {
+              ),
+              metaTool(
+                  'focus_reload',
+                  'Reload a brick — stop, reimport from disk, restart. Tools are updated immediately.',
+                  {
                       type: 'object',
                       properties: {
                           name: { type: 'string', description: 'Brick name to reload' },
@@ -263,21 +300,22 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                       required: ['name'],
                       additionalProperties: false,
                   },
-              },
-              {
-                  name: 'focus_search',
-                  description: 'Search the marketplace catalog for available bricks',
-                  inputSchema: {
+              ),
+              metaTool(
+                  'focus_search',
+                  'Search the marketplace catalog for available bricks',
+                  {
                       type: 'object',
                       properties: { query: { type: 'string', description: 'Search query' } },
                       required: ['query'],
                       additionalProperties: false,
                   },
-              },
-              {
-                  name: 'focus_install',
-                  description: 'Install a brick from the marketplace catalog',
-                  inputSchema: {
+                  true,
+              ),
+              metaTool(
+                  'focus_install',
+                  'Install a brick from the marketplace catalog',
+                  {
                       type: 'object',
                       properties: {
                           name: { type: 'string', description: 'Brick name to install' },
@@ -289,23 +327,20 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                       required: ['name'],
                       additionalProperties: false,
                   },
-              },
-              {
-                  name: 'focus_remove',
-                  description: 'Remove an installed brick',
-                  inputSchema: {
-                      type: 'object',
-                      properties: {
-                          name: { type: 'string', description: 'Brick name to remove' },
-                      },
-                      required: ['name'],
-                      additionalProperties: false,
+                  true,
+              ),
+              metaTool('focus_remove', 'Remove an installed brick', {
+                  type: 'object',
+                  properties: {
+                      name: { type: 'string', description: 'Brick name to remove' },
                   },
-              },
-              {
-                  name: 'focus_update',
-                  description: 'Update one or all installed bricks to their latest catalog version',
-                  inputSchema: {
+                  required: ['name'],
+                  additionalProperties: false,
+              }),
+              metaTool(
+                  'focus_update',
+                  'Update one or all installed bricks to their latest catalog version',
+                  {
                       type: 'object',
                       properties: {
                           brick: {
@@ -326,12 +361,11 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                       },
                       additionalProperties: false,
                   },
-              },
-              {
-                  name: 'focus_upgrade',
-                  description:
-                      'Upgrade one or all installed bricks to their latest catalog version (alias for focus_update)',
-                  inputSchema: {
+              ),
+              metaTool(
+                  'focus_upgrade',
+                  'Upgrade one or all installed bricks to their latest catalog version (alias for focus_update)',
+                  {
                       type: 'object',
                       properties: {
                           brick: {
@@ -352,60 +386,58 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                       },
                       additionalProperties: false,
                   },
-              },
-              {
-                  name: 'focus_catalog_add',
-                  description: 'Add a catalog source URL',
-                  inputSchema: {
-                      type: 'object',
-                      properties: {
-                          url: { type: 'string', description: 'Catalog source URL to add' },
-                      },
-                      required: ['url'],
-                      additionalProperties: false,
+              ),
+              metaTool('focus_catalog_add', 'Add a catalog source URL', {
+                  type: 'object',
+                  properties: {
+                      url: { type: 'string', description: 'Catalog source URL to add' },
                   },
-              },
-              {
-                  name: 'focus_catalog_list',
-                  description: 'List all configured catalog sources',
-                  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-              },
-              {
-                  name: 'focus_catalog_remove',
-                  description: 'Remove a catalog source URL',
-                  inputSchema: {
-                      type: 'object',
-                      properties: {
-                          url: { type: 'string', description: 'Catalog source URL to remove' },
-                      },
-                      required: ['url'],
-                      additionalProperties: false,
+                  required: ['url'],
+                  additionalProperties: false,
+              }),
+              metaTool('focus_catalog_list', 'List all configured catalog sources', {
+                  type: 'object',
+                  properties: {},
+                  additionalProperties: false,
+              }),
+              metaTool('focus_catalog_remove', 'Remove a catalog source URL', {
+                  type: 'object',
+                  properties: {
+                      url: { type: 'string', description: 'Catalog source URL to remove' },
                   },
-              },
-              {
-                  name: 'focus_filter',
-                  description:
-                      'Manage the tool hidden-list. Hide or show tools by name or glob pattern. ' +
-                      'Note: focus_filter itself is always visible regardless of the hidden list.',
-                  inputSchema: {
+                  required: ['url'],
+                  additionalProperties: false,
+              }),
+              // focus_tools: always visible regardless of hidden list (immune to filtering)
+              // alwaysLoad hint ensures the agent never loses access to tool management
+              metaTool(
+                  'focus_tools',
+                  'Manage FocusMCP tool visibility. Hide/show tools by name or glob, pin tools as ' +
+                      'alwaysLoad, or list/clear the config. Note: focus_tools itself is always ' +
+                      'visible regardless of the hidden list.',
+                  {
                       type: 'object',
                       properties: {
                           action: {
                               type: 'string',
-                              enum: ['hide', 'show', 'list', 'clear'],
+                              enum: ['hide', 'show', 'pin', 'unpin', 'list', 'clear'],
                               description:
-                                  'hide: add pattern to hidden list; show: remove pattern; list: show current hidden list; clear: unhide all tools',
+                                  'hide: add to hidden list; show: remove from hidden; ' +
+                                  'pin: add to alwaysLoad; unpin: remove from alwaysLoad; ' +
+                                  'list: show both lists; clear: reset both lists',
                           },
                           pattern: {
                               type: 'string',
                               description:
-                                  'Tool name or glob pattern (e.g. "sym_get" or "focus_*"). Required for hide/show.',
+                                  'Tool name or glob pattern (e.g. "sym_get" or "focus_*"). ' +
+                                  'Required for hide / show / pin / unpin.',
                           },
                       },
                       required: ['action'],
                       additionalProperties: false,
                   },
-              },
+                  true,
+              ),
           ];
 
     server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -417,9 +449,32 @@ export async function startCommand(argv: string[] = []): Promise<void> {
             })),
             ...metaTools,
         ];
-        const filteredTools = allTools.filter((t) => !isHiddenTool(t.name, hiddenPatterns));
+        const filteredTools = allTools
+            .filter(
+                (t) =>
+                    !isHiddenTool(String((t as Record<string, unknown>)['name']), hiddenPatterns),
+            )
+            .map((t) => {
+                const record = t as Record<string, unknown>;
+                const toolName = String(record['name']);
+                // Apply alwaysLoad hint from the user's pin list
+                if (alwaysLoadPatterns?.some((p) => matchesPattern(toolName, p))) {
+                    const existing = record['_meta'];
+                    const merged =
+                        existing !== null &&
+                        typeof existing === 'object' &&
+                        !Array.isArray(existing)
+                            ? {
+                                  ...(existing as Record<string, unknown>),
+                                  'anthropic/alwaysLoad': true,
+                              }
+                            : { 'anthropic/alwaysLoad': true };
+                    return { ...record, _meta: merged };
+                }
+                return t;
+            });
         // Log the count once (only when a filter is active)
-        if (hiddenPatterns !== null) {
+        if (hiddenPatterns !== null || alwaysLoadPatterns !== null) {
             process.stderr.write(`  exposed: ${filteredTools.length} / ${allTools.length} tools\n`);
         }
         return { tools: filteredTools };
@@ -435,7 +490,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 content: [
                     {
                         type: 'text' as const,
-                        text: `Tool "${name}" is not available (hidden by tool filter). Use focus_filter to manage the hidden list.`,
+                        text: `Tool "${name}" is not available (hidden by tool filter). Use focus_tools to manage the hidden list.`,
                     },
                 ],
                 isError: true,
@@ -808,11 +863,12 @@ export async function startCommand(argv: string[] = []): Promise<void> {
             } // end focus_catalog_remove
         } // end !isBenchMode
 
-        // focus_filter is always handled regardless of bench mode and is immune to the hidden list
-        if (name === 'focus_filter') {
+        // focus_tools is always handled regardless of bench mode and is immune to the hidden list
+        if (name === 'focus_tools') {
             const rawArgs = args as Record<string, unknown> | undefined;
             const action = rawArgs?.['action'];
-            const pattern = rawArgs?.['pattern'];
+            const pattern =
+                typeof rawArgs?.['pattern'] === 'string' ? rawArgs['pattern'] : undefined;
 
             if (typeof action !== 'string') {
                 return {
@@ -821,65 +877,8 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 };
             }
 
-            const configPath = join(focusDir, 'config.json');
-
-            /** Read current config, return {} if absent/malformed */
-            async function readConfig(): Promise<Record<string, unknown>> {
-                try {
-                    const raw = await readFile(configPath, 'utf-8');
-                    const parsed = JSON.parse(raw) as unknown;
-                    return typeof parsed === 'object' && parsed !== null
-                        ? (parsed as Record<string, unknown>)
-                        : {};
-                } catch {
-                    return {};
-                }
-            }
-
-            async function writeConfig(config: Record<string, unknown>): Promise<void> {
-                await mkdir(focusDir, { recursive: true });
-                await writeFile(configPath, JSON.stringify(config, null, 4), 'utf-8');
-            }
-
-            if (action === 'list') {
-                const config = await readConfig();
-                const toolsSection = config['tools'];
-                const hidden =
-                    toolsSection !== null &&
-                    typeof toolsSection === 'object' &&
-                    !Array.isArray(toolsSection) &&
-                    Array.isArray((toolsSection as Record<string, unknown>)['hidden'])
-                        ? ((toolsSection as Record<string, unknown>)['hidden'] as string[])
-                        : [];
-                const text =
-                    hidden.length === 0
-                        ? 'No tools are hidden. All tools are visible.'
-                        : `Hidden tools (${hidden.length}):\n${hidden.map((p) => `  - ${p}`).join('\n')}`;
-                return { content: [{ type: 'text' as const, text }] };
-            }
-
-            if (action === 'clear') {
-                const config = await readConfig();
-                const toolsSection =
-                    config['tools'] !== null &&
-                    typeof config['tools'] === 'object' &&
-                    !Array.isArray(config['tools'])
-                        ? (config['tools'] as Record<string, unknown>)
-                        : {};
-                toolsSection['hidden'] = [];
-                config['tools'] = toolsSection;
-                await writeConfig(config);
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: 'Hidden list cleared. All tools are now visible. Restart focus start to apply.',
-                        },
-                    ],
-                };
-            }
-
-            if (action === 'hide' || action === 'show') {
+            // Actions that require a pattern
+            if (action === 'hide' || action === 'show' || action === 'pin' || action === 'unpin') {
                 if (typeof pattern !== 'string' || pattern.trim() === '') {
                     return {
                         content: [
@@ -891,63 +890,42 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                         isError: true,
                     };
                 }
-                const config = await readConfig();
-                const toolsSection =
-                    config['tools'] !== null &&
-                    typeof config['tools'] === 'object' &&
-                    !Array.isArray(config['tools'])
-                        ? (config['tools'] as Record<string, unknown>)
-                        : {};
-                const existing = Array.isArray(toolsSection['hidden'])
-                    ? (toolsSection['hidden'] as string[])
-                    : [];
-
-                let updated: string[];
-                let message: string;
-                if (action === 'hide') {
-                    if (existing.includes(pattern)) {
-                        return {
-                            content: [
-                                {
-                                    type: 'text' as const,
-                                    text: `Pattern "${pattern}" is already in the hidden list.`,
-                                },
-                            ],
-                        };
-                    }
-                    updated = [...existing, pattern];
-                    message = `Pattern "${pattern}" added to hidden list. Restart focus start to apply.`;
-                } else {
-                    updated = existing.filter((p) => p !== pattern);
-                    if (updated.length === existing.length) {
-                        return {
-                            content: [
-                                {
-                                    type: 'text' as const,
-                                    text: `Pattern "${pattern}" was not in the hidden list.`,
-                                },
-                            ],
-                        };
-                    }
-                    message = `Pattern "${pattern}" removed from hidden list. Restart focus start to apply.`;
-                }
-
-                toolsSection['hidden'] = updated;
-                config['tools'] = toolsSection;
-                await writeConfig(config);
-                return { content: [{ type: 'text' as const, text: message }] };
             }
 
-            return {
-                content: [
-                    {
-                        type: 'text' as const,
-                        text: `Unknown action "${action}". Valid actions: hide, show, list, clear.`,
-                    },
-                ],
-                isError: true,
-            };
-        } // end focus_filter
+            // At this point, pattern is a validated string for actions that require it
+            const safePattern = pattern ?? '';
+            try {
+                let text: string;
+                if (action === 'hide') text = await configToolsHideCommand(safePattern);
+                else if (action === 'show') text = await configToolsShowCommand(safePattern);
+                else if (action === 'pin') text = await configToolsPinCommand(safePattern);
+                else if (action === 'unpin') text = await configToolsUnpinCommand(safePattern);
+                else if (action === 'list') text = await configToolsListCommand();
+                else if (action === 'clear') text = await configToolsClearCommand();
+                else {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Unknown action "${action}". Valid actions: hide, show, pin, unpin, list, clear.`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+                return { content: [{ type: 'text' as const, text }] };
+            } catch (err) {
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: `focus_tools failed: ${err instanceof Error ? err.message : String(err)}`,
+                        },
+                    ],
+                    isError: true,
+                };
+            }
+        } // end focus_tools
 
         // Brick tools (existing dispatch)
         try {

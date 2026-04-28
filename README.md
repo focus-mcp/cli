@@ -136,45 +136,59 @@ focus start --hide="sym_get,ts_cleanup"
 Patterns support a trailing `*` glob (`focus_*` matches `focus_install`, `focus_list`, etc.).
 Exact names are also accepted.
 
-> **Note:** `focus_filter` is always visible regardless of the hidden list, so you can always
-> manage the hidden list from within your AI client.
+> **Note:** `focus_tools` is always visible regardless of the hidden list, so you can always
+> manage tool visibility from within your AI client.
 
 ### Persistent config: `~/.focus/config.json`
 
-Add a `tools.hidden` list to hide tools across all sessions:
+Add a `tools` section to persist filters across sessions:
 
 ```json
 {
     "tools": {
-        "hidden": ["sym_get", "focus_remove"]
+        "hidden": ["sym_get", "fo_delete"],
+        "alwaysLoad": ["ts_index"]
     }
 }
 ```
 
-CLI `--hide` overrides the config file. If neither is set, all tools are exposed (default).
+CLI flags override the config file. If neither is set, all tools are exposed (default).
 
-### Manage the hidden list: `focus filter`
+Add `--pin=<patterns>` to mark tools as always-loaded (surfaced as `_meta.anthropic/alwaysLoad: true` in MCP responses):
 
 ```bash
-focus filter list              # show current hidden list
-focus filter hide sym_get      # add sym_get to the hidden list
-focus filter hide "focus_*"    # hide an entire family (glob)
-focus filter show sym_get      # remove sym_get from the hidden list
-focus filter clear             # unhide everything
+focus start --pin="ts_index,sym_find"
+```
+
+### Manage from the terminal: `focus tools:`
+
+```bash
+focus tools:list               # show current hidden + alwaysLoad lists
+focus tools:hide sym_get       # add sym_get to the hidden list
+focus tools:hide "focus_*"     # hide an entire family (glob)
+focus tools:show sym_get       # remove sym_get from the hidden list
+focus tools:pin ts_index       # mark ts_index as alwaysLoad
+focus tools:unpin ts_index     # remove ts_index from alwaysLoad
+focus tools:clear              # reset both lists
+
+# Legacy aliases (permanent, no deprecation):
+focus filter list
+focus filter hide sym_get
 ```
 
 Changes are written to `~/.focus/config.json` and take effect on the next `focus start`.
 
-### From your AI client: `focus_filter` MCP tool
+### From your AI client: `focus_tools` MCP tool
 
-The `focus_filter` MCP tool mirrors the CLI subcommand — your AI agent can manage the hidden
-list directly:
+The `focus_tools` MCP tool lets your AI agent manage tool visibility directly:
 
 ```
-focus_filter action=hide   pattern=sym_get
-focus_filter action=show   pattern=sym_get
-focus_filter action=list
-focus_filter action=clear
+focus_tools action=hide   pattern=sym_get
+focus_tools action=show   pattern=sym_get
+focus_tools action=pin    pattern=ts_index
+focus_tools action=unpin  pattern=ts_index
+focus_tools action=list
+focus_tools action=clear
 ```
 
 Restart `focus start` (or reload your MCP client) to apply changes.
