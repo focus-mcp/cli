@@ -34,8 +34,8 @@ importers:
         specifier: ^19.8.1
         version: 19.8.1
       '@focus-mcp/core':
-        specifier: ^1.2.0
-        version: 1.2.0
+        specifier: ^1.5.0
+        version: 1.5.0
       '@types/node':
         specifier: ^22.10.0
         version: 22.19.17
@@ -440,8 +440,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@focus-mcp/core@1.2.0':
-    resolution: {integrity: sha512-Qt6jOfXYg41ryEbXNStBeQ3bKPWFZgOxC38l/pbriXpC32vx6xCU2lxOy9Gk/HHHv1vqu2txME/UZES8PT/mYA==}
+  '@focus-mcp/core@1.5.0':
+    resolution: {integrity: sha512-2JnbwwCNaRBnb0qxg8Ci3T0l53cUBMCTE8kxn6Z0xQ2W2qMtSx9KhEO+3pi3/9UlMb5fN9s76kgP3MuDluZNtg==}
 
   '@hono/node-server@1.19.14':
     resolution: {integrity: sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw==}
@@ -2687,7 +2687,7 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
-  '@focus-mcp/core@1.2.0':
+  '@focus-mcp/core@1.5.0':
     dependencies:
       '@opentelemetry/api': 1.9.1
 

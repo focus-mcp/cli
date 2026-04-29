@@ -31,6 +31,12 @@ const {
     mockRemoveCommand,
     mockCatalogCommand,
     mockUpgradeCommand,
+    mockConfigToolsHideCommand,
+    mockConfigToolsShowCommand,
+    mockConfigToolsPinCommand,
+    mockConfigToolsUnpinCommand,
+    mockConfigToolsListCommand,
+    mockConfigToolsClearCommand,
 } = vi.hoisted(() => {
     const mockListen = vi.fn();
     const mockOnce = vi.fn();
@@ -78,6 +84,12 @@ const {
             failed: 0,
             output: 'echo: 1.0.0 → 2.0.0\n\n1 upgraded, 0 up-to-date, 0 failed',
         }),
+        mockConfigToolsHideCommand: vi.fn().mockResolvedValue('hidden ok'),
+        mockConfigToolsShowCommand: vi.fn().mockResolvedValue('shown ok'),
+        mockConfigToolsPinCommand: vi.fn().mockResolvedValue('pinned ok'),
+        mockConfigToolsUnpinCommand: vi.fn().mockResolvedValue('unpinned ok'),
+        mockConfigToolsListCommand: vi.fn().mockResolvedValue('hidden: (none)\nalwaysLoad: (none)'),
+        mockConfigToolsClearCommand: vi.fn().mockResolvedValue('cleared ok'),
     };
 });
 
@@ -104,6 +116,14 @@ vi.mock('./add.ts', () => ({ addCommand: mockAddCommand }));
 vi.mock('./remove.ts', () => ({ removeCommand: mockRemoveCommand }));
 vi.mock('./catalog.ts', () => ({ catalogCommand: mockCatalogCommand }));
 vi.mock('./upgrade.ts', () => ({ upgradeCommand: mockUpgradeCommand }));
+vi.mock('./config.ts', () => ({
+    configToolsHideCommand: mockConfigToolsHideCommand,
+    configToolsShowCommand: mockConfigToolsShowCommand,
+    configToolsPinCommand: mockConfigToolsPinCommand,
+    configToolsUnpinCommand: mockConfigToolsUnpinCommand,
+    configToolsListCommand: mockConfigToolsListCommand,
+    configToolsClearCommand: mockConfigToolsClearCommand,
+}));
 
 vi.mock('../adapters/catalog-store-adapter.ts', () => ({
     FilesystemCatalogStoreAdapter: vi.fn().mockImplementation(() => ({})),
@@ -173,7 +193,8 @@ describe('startCommand', () => {
         mockSetRequestHandler.mockClear();
         mockCallTool.mockReset();
         mockCallTool.mockResolvedValue({ content: [] });
-        mockListTools.mockClear();
+        mockListTools.mockReset();
+        mockListTools.mockReturnValue([]);
         lastTransportInstance.current = null;
         mockListen.mockReset();
         mockOnce.mockReset();
@@ -203,6 +224,18 @@ describe('startCommand', () => {
             failed: 0,
             output: 'echo: 1.0.0 → 2.0.0\n\n1 upgraded, 0 up-to-date, 0 failed',
         });
+        mockConfigToolsHideCommand.mockReset();
+        mockConfigToolsHideCommand.mockResolvedValue('hidden ok');
+        mockConfigToolsShowCommand.mockReset();
+        mockConfigToolsShowCommand.mockResolvedValue('shown ok');
+        mockConfigToolsPinCommand.mockReset();
+        mockConfigToolsPinCommand.mockResolvedValue('pinned ok');
+        mockConfigToolsUnpinCommand.mockReset();
+        mockConfigToolsUnpinCommand.mockResolvedValue('unpinned ok');
+        mockConfigToolsListCommand.mockReset();
+        mockConfigToolsListCommand.mockResolvedValue('hidden: (none)\nalwaysLoad: (none)');
+        mockConfigToolsClearCommand.mockReset();
+        mockConfigToolsClearCommand.mockResolvedValue('cleared ok');
     });
 
     afterEach(() => {
@@ -323,7 +356,7 @@ describe('startCommand', () => {
         const handler = listToolsCall[1] as () => Promise<{ tools: unknown[] }>;
         const result = await handler();
 
-        // Should include the brick tool + 12 internal tools
+        // Should include the brick tool + 20 internal tools (bricks: + catalog: + self: + tools: + check_updates)
         expect(result.tools).toEqual(
             expect.arrayContaining([
                 {
@@ -331,21 +364,28 @@ describe('startCommand', () => {
                     description: 'Says something',
                     inputSchema: { type: 'object', properties: {} },
                 },
-                expect.objectContaining({ name: 'focus_list' }),
-                expect.objectContaining({ name: 'focus_load' }),
-                expect.objectContaining({ name: 'focus_unload' }),
-                expect.objectContaining({ name: 'focus_reload' }),
-                expect.objectContaining({ name: 'focus_search' }),
-                expect.objectContaining({ name: 'focus_install' }),
-                expect.objectContaining({ name: 'focus_remove' }),
-                expect.objectContaining({ name: 'focus_update' }),
-                expect.objectContaining({ name: 'focus_upgrade' }),
+                expect.objectContaining({ name: 'focus_bricks_list' }),
+                expect.objectContaining({ name: 'focus_bricks_load' }),
+                expect.objectContaining({ name: 'focus_bricks_unload' }),
+                expect.objectContaining({ name: 'focus_bricks_reload' }),
+                expect.objectContaining({ name: 'focus_bricks_search' }),
+                expect.objectContaining({ name: 'focus_bricks_install' }),
+                expect.objectContaining({ name: 'focus_bricks_remove' }),
+                expect.objectContaining({ name: 'focus_bricks_update' }),
                 expect.objectContaining({ name: 'focus_catalog_add' }),
                 expect.objectContaining({ name: 'focus_catalog_list' }),
                 expect.objectContaining({ name: 'focus_catalog_remove' }),
+                expect.objectContaining({ name: 'focus_self_update' }),
+                expect.objectContaining({ name: 'focus_tools_hide' }),
+                expect.objectContaining({ name: 'focus_tools_show' }),
+                expect.objectContaining({ name: 'focus_tools_pin' }),
+                expect.objectContaining({ name: 'focus_tools_unpin' }),
+                expect.objectContaining({ name: 'focus_tools_list' }),
+                expect.objectContaining({ name: 'focus_tools_clear' }),
+                expect.objectContaining({ name: 'focus_check_updates' }),
             ]),
         );
-        expect((result.tools as unknown[]).length).toBe(13);
+        expect((result.tools as unknown[]).length).toBe(20);
 
         void promise;
     });
@@ -652,7 +692,7 @@ describe('startCommand', () => {
         }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
         const result = await handler({
-            params: { name: 'focus_load', arguments: { name: 'my-brick' } },
+            params: { name: 'focus_bricks_load', arguments: { name: 'my-brick' } },
         });
 
         expect(result.isError).toBe(true);
@@ -678,7 +718,7 @@ describe('startCommand', () => {
         }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
         const result = await handler({
-            params: { name: 'focus_load', arguments: { name: 'ghost-brick' } },
+            params: { name: 'focus_bricks_load', arguments: { name: 'ghost-brick' } },
         });
 
         expect(result.isError).toBe(true);
@@ -825,7 +865,7 @@ describe('startCommand', () => {
                 params: { name: string; arguments?: Record<string, unknown> };
             }) => Promise<{ content: unknown[] }>;
 
-            const result = await handler({ params: { name: 'focus_list', arguments: {} } });
+            const result = await handler({ params: { name: 'focus_bricks_list', arguments: {} } });
 
             expect(result).toEqual({
                 content: [{ type: 'text', text: 'No bricks loaded.' }],
@@ -860,7 +900,7 @@ describe('startCommand', () => {
                 params: { name: string; arguments?: Record<string, unknown> };
             }) => Promise<{ content: Array<{ type: string; text: string }> }>;
 
-            const result = await handler({ params: { name: 'focus_list', arguments: {} } });
+            const result = await handler({ params: { name: 'focus_bricks_list', arguments: {} } });
 
             expect(result.content[0]?.type).toBe('text');
             expect(result.content[0]?.text).toContain('echo');
@@ -884,7 +924,7 @@ describe('startCommand', () => {
                 params: { name: string; arguments?: Record<string, unknown> };
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
-            const result = await handler({ params: { name: 'focus_load', arguments: {} } });
+            const result = await handler({ params: { name: 'focus_bricks_load', arguments: {} } });
 
             expect(result.isError).toBe(true);
             expect(result.content[0]?.text).toContain('Missing or invalid brick name');
@@ -914,7 +954,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_load', arguments: { name: 'echo' } },
+                params: { name: 'focus_bricks_load', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBe(true);
@@ -946,7 +986,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_load', arguments: { name: 'echo' } },
+                params: { name: 'focus_bricks_load', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBeUndefined();
@@ -981,7 +1021,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_load', arguments: { name: 'echo' } },
+                params: { name: 'focus_bricks_load', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBe(true);
@@ -1007,7 +1047,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_unload', arguments: { name: 'unknown-brick' } },
+                params: { name: 'focus_bricks_unload', arguments: { name: 'unknown-brick' } },
             });
 
             expect(result.isError).toBe(true);
@@ -1039,7 +1079,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_unload', arguments: { name: 'echo' } },
+                params: { name: 'focus_bricks_unload', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBeUndefined();
@@ -1066,7 +1106,9 @@ describe('startCommand', () => {
                 params: { name: string; arguments?: Record<string, unknown> };
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
-            const result = await handler({ params: { name: 'focus_unload', arguments: {} } });
+            const result = await handler({
+                params: { name: 'focus_bricks_unload', arguments: {} },
+            });
 
             expect(result.isError).toBe(true);
             expect(result.content[0]?.text).toContain('Missing or invalid brick name');
@@ -1096,7 +1138,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_unload', arguments: { name: 'echo' } },
+                params: { name: 'focus_bricks_unload', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBe(true);
@@ -1119,7 +1161,9 @@ describe('startCommand', () => {
                 params: { name: string; arguments?: Record<string, unknown> };
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
-            const result = await handler({ params: { name: 'focus_reload', arguments: {} } });
+            const result = await handler({
+                params: { name: 'focus_bricks_reload', arguments: {} },
+            });
 
             expect(result.isError).toBe(true);
             expect(result.content[0]?.text).toContain('Missing or invalid brick name');
@@ -1143,7 +1187,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_reload', arguments: { name: 'unknown-brick' } },
+                params: { name: 'focus_bricks_reload', arguments: { name: 'unknown-brick' } },
             });
 
             expect(result.isError).toBe(true);
@@ -1181,7 +1225,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_reload', arguments: { name: 'echo' } },
+                params: { name: 'focus_bricks_reload', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBeUndefined();
@@ -1226,7 +1270,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_reload', arguments: { name: 'echo' } },
+                params: { name: 'focus_bricks_reload', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBe(true);
@@ -1281,7 +1325,7 @@ describe('startCommand', () => {
                 params: { name: string; arguments?: Record<string, unknown> };
             }) => Promise<{ content: Array<{ type: string; text: string }> }>;
 
-            const result = await handler({ params: { name: 'focus_list', arguments: {} } });
+            const result = await handler({ params: { name: 'focus_bricks_list', arguments: {} } });
 
             expect(result.content[0]?.text).toContain('(no tools)');
 
@@ -1310,7 +1354,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_unload', arguments: { name: 'echo' } },
+                params: { name: 'focus_bricks_unload', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBe(true);
@@ -1343,7 +1387,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_reload', arguments: { name: 'echo' } },
+                params: { name: 'focus_bricks_reload', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBe(true);
@@ -1394,7 +1438,7 @@ describe('startCommand', () => {
             }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
             const result = await handler({
-                params: { name: 'focus_load', arguments: { name: 'echo' } },
+                params: { name: 'focus_bricks_load', arguments: { name: 'echo' } },
             });
 
             expect(result.isError).toBe(true);
@@ -1436,6 +1480,14 @@ describe('startCommand', () => {
                 mockSearchCommand.mockResolvedValue({
                     output: 'brick-a  1.0.0  catalog',
                     errors: [],
+                    bricks: [
+                        {
+                            name: 'brick-a',
+                            version: '1.0.0',
+                            catalog: 'catalog',
+                            description: 'A brick',
+                        },
+                    ],
                 });
 
                 const { startCommand } = await import('./start.ts');
@@ -1454,11 +1506,12 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_search', arguments: { query: 'git' } },
+                    params: { name: 'focus_bricks_search', arguments: { query: 'git' } },
                 });
 
                 expect(result.isError).toBeUndefined();
                 expect(result.content[0]?.text).toBe('brick-a  1.0.0  catalog');
+                expect(result.content[1]?.text).toContain('"bricks"');
                 expect(mockSearchCommand).toHaveBeenCalledWith(
                     expect.objectContaining({ query: 'git' }),
                 );
@@ -1470,6 +1523,7 @@ describe('startCommand', () => {
                 mockSearchCommand.mockResolvedValue({
                     output: 'results',
                     errors: ['https://example.com: fetch failed'],
+                    bricks: [],
                 });
 
                 const { startCommand } = await import('./start.ts');
@@ -1488,7 +1542,7 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_search', arguments: { query: '' } },
+                    params: { name: 'focus_bricks_search', arguments: { query: '' } },
                 });
 
                 expect(result.isError).toBeUndefined();
@@ -1515,7 +1569,7 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_search', arguments: {} },
+                    params: { name: 'focus_bricks_search', arguments: {} },
                 });
 
                 expect(result.isError).toBe(true);
@@ -1543,12 +1597,58 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_search', arguments: { query: 'git' } },
+                    params: { name: 'focus_bricks_search', arguments: { query: 'git' } },
                 });
 
                 expect(result.isError).toBe(true);
                 expect(result.content[0]?.text).toContain('Search failed');
                 expect(result.content[0]?.text).toContain('network error');
+
+                void promise;
+            });
+
+            it('includes keywords and recommendedFor in the structured JSON response', async () => {
+                mockSearchCommand.mockResolvedValue({
+                    output: 'enriched  1.0.0  catalog  Enriched brick',
+                    errors: [],
+                    bricks: [
+                        {
+                            name: 'enriched',
+                            version: '1.0.0',
+                            catalog: 'catalog',
+                            description: 'Enriched brick',
+                            keywords: ['typescript', 'ast'],
+                            recommendedFor: ['react', 'next'],
+                        },
+                    ],
+                });
+
+                const { startCommand } = await import('./start.ts');
+                const promise = startCommand([]);
+                await new Promise((r) => setTimeout(r, 10));
+
+                const callToolCall = mockSetRequestHandler.mock.calls.find(
+                    (call) => call[0] === 'CallToolRequestSchema',
+                );
+                if (!callToolCall) throw new Error('CallTool handler not registered');
+                const handler = callToolCall[1] as (req: {
+                    params: { name: string; arguments?: Record<string, unknown> };
+                }) => Promise<{
+                    content: Array<{ type: string; text: string }>;
+                    isError?: boolean;
+                }>;
+
+                const result = await handler({
+                    params: { name: 'focus_bricks_search', arguments: { query: 'enriched' } },
+                });
+
+                expect(result.isError).toBeUndefined();
+                const jsonText = result.content[1]?.text ?? '';
+                const parsed = JSON.parse(jsonText) as { bricks: unknown[] };
+                expect(parsed.bricks).toHaveLength(1);
+                const brick = parsed.bricks[0] as Record<string, unknown>;
+                expect(brick['keywords']).toEqual(['typescript', 'ast']);
+                expect(brick['recommendedFor']).toEqual(['react', 'next']);
 
                 void promise;
             });
@@ -1574,7 +1674,7 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_install', arguments: { name: 'my-brick' } },
+                    params: { name: 'focus_bricks_install', arguments: { name: 'my-brick' } },
                 });
 
                 expect(result.isError).toBeUndefined();
@@ -1603,7 +1703,7 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_install', arguments: {} },
+                    params: { name: 'focus_bricks_install', arguments: {} },
                 });
 
                 expect(result.isError).toBe(true);
@@ -1631,7 +1731,7 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_install', arguments: { name: 'ghost-brick' } },
+                    params: { name: 'focus_bricks_install', arguments: { name: 'ghost-brick' } },
                 });
 
                 expect(result.isError).toBe(true);
@@ -1664,7 +1764,7 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_remove', arguments: { name: 'my-brick' } },
+                    params: { name: 'focus_bricks_remove', arguments: { name: 'my-brick' } },
                 });
 
                 expect(result.isError).toBeUndefined();
@@ -1693,7 +1793,7 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_remove', arguments: {} },
+                    params: { name: 'focus_bricks_remove', arguments: {} },
                 });
 
                 expect(result.isError).toBe(true);
@@ -1721,7 +1821,7 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_remove', arguments: { name: 'ghost-brick' } },
+                    params: { name: 'focus_bricks_remove', arguments: { name: 'ghost-brick' } },
                 });
 
                 expect(result.isError).toBe(true);
@@ -1757,7 +1857,7 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_update', arguments: {} },
+                    params: { name: 'focus_bricks_update', arguments: {} },
                 });
 
                 expect(result.isError).toBeUndefined();
@@ -1793,7 +1893,7 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_update', arguments: { brick: 'echo' } },
+                    params: { name: 'focus_bricks_update', arguments: { brick: 'echo' } },
                 });
 
                 expect(result.isError).toBeUndefined();
@@ -1829,7 +1929,7 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_update', arguments: { check: true } },
+                    params: { name: 'focus_bricks_update', arguments: { check: true } },
                 });
 
                 expect(result.isError).toBeUndefined();
@@ -1860,114 +1960,11 @@ describe('startCommand', () => {
                 }>;
 
                 const result = await handler({
-                    params: { name: 'focus_update', arguments: {} },
+                    params: { name: 'focus_bricks_update', arguments: {} },
                 });
 
                 expect(result.isError).toBe(true);
-                expect(result.content[0]?.text).toContain('Update failed');
-                expect(result.content[0]?.text).toContain('no catalog source');
-
-                void promise;
-            });
-        });
-
-        describe('focus_upgrade', () => {
-            it('upgrades all bricks when called without arguments (happy path)', async () => {
-                mockUpgradeCommand.mockResolvedValue({
-                    upgraded: 1,
-                    upToDate: 0,
-                    failed: 0,
-                    output: 'echo: 1.0.0 → 2.0.0\n\n1 upgraded, 0 up-to-date, 0 failed',
-                });
-
-                const { startCommand } = await import('./start.ts');
-                const promise = startCommand([]);
-                await new Promise((r) => setTimeout(r, 10));
-
-                const callToolCall = mockSetRequestHandler.mock.calls.find(
-                    (call) => call[0] === 'CallToolRequestSchema',
-                );
-                if (!callToolCall) throw new Error('CallTool handler not registered');
-                const handler = callToolCall[1] as (req: {
-                    params: { name: string; arguments?: Record<string, unknown> };
-                }) => Promise<{
-                    content: Array<{ type: string; text: string }>;
-                    isError?: boolean;
-                }>;
-
-                const result = await handler({
-                    params: { name: 'focus_upgrade', arguments: {} },
-                });
-
-                expect(result.isError).toBeUndefined();
-                expect(result.content[0]?.text).toContain('1 upgraded');
-                expect(mockUpgradeCommand).toHaveBeenCalledWith(
-                    expect.objectContaining({ all: true, check: false }),
-                );
-
-                void promise;
-            });
-
-            it('returns dry-run output when check=true (--check flag)', async () => {
-                mockUpgradeCommand.mockResolvedValue({
-                    upgraded: 1,
-                    upToDate: 0,
-                    failed: 0,
-                    output: 'echo: 1.0.0 → 2.0.0\n\n1 would upgrade, 0 up-to-date, 0 failed',
-                });
-
-                const { startCommand } = await import('./start.ts');
-                const promise = startCommand([]);
-                await new Promise((r) => setTimeout(r, 10));
-
-                const callToolCall = mockSetRequestHandler.mock.calls.find(
-                    (call) => call[0] === 'CallToolRequestSchema',
-                );
-                if (!callToolCall) throw new Error('CallTool handler not registered');
-                const handler = callToolCall[1] as (req: {
-                    params: { name: string; arguments?: Record<string, unknown> };
-                }) => Promise<{
-                    content: Array<{ type: string; text: string }>;
-                    isError?: boolean;
-                }>;
-
-                const result = await handler({
-                    params: { name: 'focus_upgrade', arguments: { check: true } },
-                });
-
-                expect(result.isError).toBeUndefined();
-                expect(result.content[0]?.text).toContain('would upgrade');
-                expect(mockUpgradeCommand).toHaveBeenCalledWith(
-                    expect.objectContaining({ check: true }),
-                );
-
-                void promise;
-            });
-
-            it('returns isError when upgradeCommand throws', async () => {
-                mockUpgradeCommand.mockRejectedValue(new Error('no catalog source'));
-
-                const { startCommand } = await import('./start.ts');
-                const promise = startCommand([]);
-                await new Promise((r) => setTimeout(r, 10));
-
-                const callToolCall = mockSetRequestHandler.mock.calls.find(
-                    (call) => call[0] === 'CallToolRequestSchema',
-                );
-                if (!callToolCall) throw new Error('CallTool handler not registered');
-                const handler = callToolCall[1] as (req: {
-                    params: { name: string; arguments?: Record<string, unknown> };
-                }) => Promise<{
-                    content: Array<{ type: string; text: string }>;
-                    isError?: boolean;
-                }>;
-
-                const result = await handler({
-                    params: { name: 'focus_upgrade', arguments: {} },
-                });
-
-                expect(result.isError).toBe(true);
-                expect(result.content[0]?.text).toContain('Upgrade failed');
+                expect(result.content[0]?.text).toContain('Bricks update failed');
                 expect(result.content[0]?.text).toContain('no catalog source');
 
                 void promise;
@@ -2282,6 +2279,7 @@ describe('startCommand', () => {
     it('enriches a Missing dependency error with actionable focus commands', async () => {
         // Simulate a brick that fails to load with a Missing dependency error.
         // enrichStartError intercepts the message and adds recovery hints.
+        // Read order: config.json first (ENOENT → no filter), then center.json (has the brick).
         mockLoadBricks.mockResolvedValueOnce({
             bricks: [],
             failures: [
@@ -2291,9 +2289,11 @@ describe('startCommand', () => {
                 },
             ],
         });
-        mockReadFile.mockResolvedValueOnce(
-            JSON.stringify({ bricks: { codebase: { version: '1.0.0', enabled: true } } }),
-        );
+        mockReadFile
+            .mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' })) // config.json absent
+            .mockResolvedValueOnce(
+                JSON.stringify({ bricks: { codebase: { version: '1.0.0', enabled: true } } }),
+            ); // center.json
 
         const { startCommand } = await import('./start.ts');
         // stdio mode blocks forever — run without await
@@ -2314,7 +2314,7 @@ describe('startCommand', () => {
 
     // ---------- FOCUS_BENCH_MODE — meta tool isolation ----------
 
-    it('FOCUS_BENCH_MODE=true skips meta tools (focus_list, focus_install, etc.)', async () => {
+    it('FOCUS_BENCH_MODE=true skips meta tools (focus_bricks_list, focus_bricks_install, etc.)', async () => {
         const originalEnv = process.env['FOCUS_BENCH_MODE'];
         process.env['FOCUS_BENCH_MODE'] = 'true';
         try {
@@ -2334,18 +2334,18 @@ describe('startCommand', () => {
             // No meta tools should be present
             const names = (result.tools as Array<{ name: string }>).map((t) => t.name);
             const META_TOOL_NAMES = [
-                'focus_list',
-                'focus_load',
-                'focus_unload',
-                'focus_reload',
-                'focus_search',
-                'focus_install',
-                'focus_remove',
-                'focus_update',
-                'focus_upgrade',
+                'focus_bricks_list',
+                'focus_bricks_load',
+                'focus_bricks_unload',
+                'focus_bricks_reload',
+                'focus_bricks_search',
+                'focus_bricks_install',
+                'focus_bricks_remove',
+                'focus_bricks_update',
                 'focus_catalog_add',
                 'focus_catalog_list',
                 'focus_catalog_remove',
+                'focus_self_update',
             ];
             for (const metaName of META_TOOL_NAMES) {
                 expect(names).not.toContain(metaName);
@@ -2380,18 +2380,24 @@ describe('startCommand', () => {
 
             const names = (result.tools as Array<{ name: string }>).map((t) => t.name);
             const META_TOOL_NAMES = [
-                'focus_list',
-                'focus_load',
-                'focus_unload',
-                'focus_reload',
-                'focus_search',
-                'focus_install',
-                'focus_remove',
-                'focus_update',
-                'focus_upgrade',
+                'focus_bricks_list',
+                'focus_bricks_load',
+                'focus_bricks_unload',
+                'focus_bricks_reload',
+                'focus_bricks_search',
+                'focus_bricks_install',
+                'focus_bricks_remove',
+                'focus_bricks_update',
                 'focus_catalog_add',
                 'focus_catalog_list',
                 'focus_catalog_remove',
+                'focus_self_update',
+                'focus_tools_hide',
+                'focus_tools_show',
+                'focus_tools_pin',
+                'focus_tools_unpin',
+                'focus_tools_list',
+                'focus_tools_clear',
             ];
             for (const metaName of META_TOOL_NAMES) {
                 expect(names).toContain(metaName);
@@ -2405,5 +2411,486 @@ describe('startCommand', () => {
                 process.env['FOCUS_BENCH_MODE'] = originalEnv;
             }
         }
+    });
+
+    // ---------- Tool filter: matchesPattern + isHiddenTool ----------
+
+    it('matchesPattern matches exact tool names', async () => {
+        const { matchesPattern } = await import('./start.ts');
+        expect(matchesPattern('focus_list', 'focus_list')).toBe(true);
+        expect(matchesPattern('focus_list', 'focus_load')).toBe(false);
+    });
+
+    it('matchesPattern supports trailing wildcard', async () => {
+        const { matchesPattern } = await import('./start.ts');
+        expect(matchesPattern('focus_install', 'focus_*')).toBe(true);
+        expect(matchesPattern('focus_list', 'focus_*')).toBe(true);
+        expect(matchesPattern('sym_find', 'focus_*')).toBe(false);
+        expect(matchesPattern('sym_find', 'sym_*')).toBe(true);
+    });
+
+    it('isHiddenTool: no hidden list → nothing hidden', async () => {
+        const { isHiddenTool } = await import('./start.ts');
+        expect(isHiddenTool('any_tool', null)).toBe(false);
+        expect(isHiddenTool('focus_bricks_list', null)).toBe(false);
+    });
+
+    it('isHiddenTool: hidden list → matching tools hidden', async () => {
+        const { isHiddenTool } = await import('./start.ts');
+        expect(isHiddenTool('focus_bricks_list', ['focus_*'])).toBe(true);
+        expect(isHiddenTool('sym_find', ['focus_*'])).toBe(false);
+        expect(isHiddenTool('sym_find', ['focus_*', 'sym_*'])).toBe(true);
+    });
+
+    it('isHiddenTool: focus_tools_* are immune (never hidden)', async () => {
+        const { isHiddenTool } = await import('./start.ts');
+        expect(isHiddenTool('focus_tools_hide', ['focus_*'])).toBe(false);
+        expect(isHiddenTool('focus_tools_list', ['focus_tools_list'])).toBe(false);
+        expect(isHiddenTool('focus_tools_clear', ['focus_*'])).toBe(false);
+    });
+
+    // ---------- Tool filter: --hide CLI arg integration ----------
+
+    it('--hide=sym_get hides sym_get from tools/list', async () => {
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+            {
+                name: 'sym_get',
+                description: 'get',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand(['--hide=sym_get']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).toContain('sym_find'); // not hidden
+        expect(names).toContain('focus_bricks_list'); // not hidden
+        expect(names).not.toContain('sym_get'); // hidden
+
+        void promise;
+    });
+
+    it('--hide=focus_* hides focus_* but focus_tools_* stays visible', async () => {
+        mockListTools.mockReturnValue([]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand(['--hide=focus_*']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).not.toContain('focus_bricks_list'); // hidden by focus_*
+        expect(names).not.toContain('focus_bricks_install'); // hidden by focus_*
+        // focus_tools_* are immune — always visible
+        expect(names).toContain('focus_tools_hide');
+        expect(names).toContain('focus_tools_list');
+
+        void promise;
+    });
+
+    it('--pin=focus_bricks_list adds alwaysLoad hint to matching tools', async () => {
+        mockListTools.mockReturnValue([]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand(['--pin=focus_bricks_list']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{
+            tools: Array<Record<string, unknown>>;
+        }>;
+        const result = await handler();
+
+        const focusList = result.tools.find((t) => t['name'] === 'focus_bricks_list');
+        expect(focusList).toBeDefined();
+        // The _meta.anthropic/alwaysLoad hint should be set
+        const meta = focusList?.['_meta'] as Record<string, unknown> | undefined;
+        expect(meta?.['anthropic/alwaysLoad']).toBe(true);
+
+        // focus_bricks_search is NOT pinned by --pin=focus_bricks_list so it should NOT have the user pin
+        // (it already has alwaysLoad from metaTool default, but that is separate)
+        const focusInstall = result.tools.find((t) => t['name'] === 'focus_bricks_install');
+        expect(focusInstall).toBeDefined();
+        const installMeta = focusInstall?.['_meta'] as Record<string, unknown> | undefined;
+        // focus_bricks_install is in the server defaults (alwaysLoad=true), so it should still have it
+        expect(installMeta?.['anthropic/alwaysLoad']).toBe(true);
+
+        void promise;
+    });
+
+    it('no filter option → all tools exposed (default behaviour)', async () => {
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+            {
+                name: 'ts_index',
+                description: 'index',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).toContain('sym_find');
+        expect(names).toContain('ts_index');
+        expect(names).toContain('focus_bricks_list');
+
+        void promise;
+    });
+
+    it('dispatcher rejects calls to hidden tools', async () => {
+        mockListTools.mockReturnValue([]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand(['--hide=sym_get']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const callToolCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'CallToolRequestSchema',
+        );
+        if (!callToolCall) throw new Error('CallTool handler not registered');
+        const handler = callToolCall[1] as (req: {
+            params: { name: string; arguments?: unknown };
+        }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+
+        // sym_get is hidden → rejected
+        const result = await handler({ params: { name: 'sym_get', arguments: {} } });
+        expect(result.isError).toBe(true);
+        expect(result.content[0]?.text).toContain('hidden');
+
+        void promise;
+    });
+
+    // ---------- Tool filter: config file integration ----------
+
+    it('config file tools.hidden is used when no CLI args', async () => {
+        // Execution order: config.json read first (for filters), then center.json (for bricks)
+        mockReadFile
+            .mockResolvedValueOnce(JSON.stringify({ tools: { hidden: ['sym_get'] } }))
+            .mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+            {
+                name: 'sym_get',
+                description: 'get',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).toContain('sym_find');
+        expect(names).not.toContain('sym_get'); // hidden by config file
+
+        void promise;
+    });
+
+    it('CLI --hide overrides config file hidden list', async () => {
+        // CLI --hide=ts_index is passed, so config.json is NOT read for filters
+        // center.json is absent
+        mockReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+            {
+                name: 'ts_index',
+                description: 'index',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand(['--hide=ts_index']);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).toContain('sym_find');
+        expect(names).not.toContain('ts_index'); // hidden by CLI
+
+        void promise;
+    });
+
+    it('no filter (no CLI args, no config file) → all tools exposed', async () => {
+        // Both config.json and center.json absent — default: everything exposed
+        mockReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+        const result = await handler();
+
+        const names = result.tools.map((t) => t.name);
+        expect(names).toContain('sym_find');
+        expect(names).toContain('focus_bricks_list');
+
+        void promise;
+    });
+
+    it('config file tools.alwaysLoad adds alwaysLoad hint when no CLI args', async () => {
+        // config.json has alwaysLoad for sym_find; center.json absent
+        mockReadFile
+            .mockResolvedValueOnce(JSON.stringify({ tools: { alwaysLoad: ['sym_find'] } }))
+            .mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+        mockListTools.mockReturnValue([
+            {
+                name: 'sym_find',
+                description: 'find',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            },
+        ]);
+
+        const { startCommand } = await import('./start.ts');
+        const promise = startCommand([]);
+        await new Promise((r) => setTimeout(r, 10));
+
+        const listToolsCall = mockSetRequestHandler.mock.calls.find(
+            (call) => call[0] === 'ListToolsRequestSchema',
+        );
+        if (!listToolsCall) throw new Error('ListTools handler not registered');
+        const handler = listToolsCall[1] as () => Promise<{
+            tools: Array<Record<string, unknown>>;
+        }>;
+        const result = await handler();
+
+        const symFind = result.tools.find((t) => t['name'] === 'sym_find');
+        expect(symFind).toBeDefined();
+        const meta = symFind?.['_meta'] as Record<string, unknown> | undefined;
+        expect(meta?.['anthropic/alwaysLoad']).toBe(true);
+
+        void promise;
+    });
+
+    // ---------- MCP tools: focus_tools_* (split from singleton focus_tools in 2.0.0) ----------
+
+    describe('focus_tools_* MCP tools', () => {
+        /** Helper: get the CallTool handler from a started server */
+        async function getCallToolHandler(): Promise<
+            (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>
+        > {
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand([]);
+            await new Promise((r) => setTimeout(r, 10));
+            const call = mockSetRequestHandler.mock.calls.find(
+                (c) => c[0] === 'CallToolRequestSchema',
+            );
+            if (!call) throw new Error('CallTool handler not registered');
+            void promise;
+            return call[1] as (req: {
+                params: { name: string; arguments?: Record<string, unknown> };
+            }) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+        }
+
+        it('focus_tools_* are always present in ListTools regardless of --hide=focus_*', async () => {
+            const { startCommand } = await import('./start.ts');
+            const promise = startCommand(['--hide=focus_*']);
+            await new Promise((r) => setTimeout(r, 10));
+
+            const listToolsCall = mockSetRequestHandler.mock.calls.find(
+                (c) => c[0] === 'ListToolsRequestSchema',
+            );
+            if (!listToolsCall) throw new Error('ListTools handler not registered');
+            const handler = listToolsCall[1] as () => Promise<{ tools: Array<{ name: string }> }>;
+            const result = await handler();
+            const names = result.tools.map((t) => t.name);
+            expect(names).toContain('focus_tools_hide');
+            expect(names).toContain('focus_tools_show');
+            expect(names).toContain('focus_tools_pin');
+            expect(names).toContain('focus_tools_unpin');
+            expect(names).toContain('focus_tools_list');
+            expect(names).toContain('focus_tools_clear');
+
+            void promise;
+        });
+
+        it('focus_tools_hide delegates to configToolsHideCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: {
+                    name: 'focus_tools_hide',
+                    arguments: { pattern: 'sym_get' },
+                },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toBe('hidden ok');
+            expect(mockConfigToolsHideCommand).toHaveBeenCalledWith('sym_get');
+        });
+
+        it('focus_tools_show delegates to configToolsShowCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: {
+                    name: 'focus_tools_show',
+                    arguments: { pattern: 'sym_get' },
+                },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toBe('shown ok');
+            expect(mockConfigToolsShowCommand).toHaveBeenCalledWith('sym_get');
+        });
+
+        it('focus_tools_pin delegates to configToolsPinCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: {
+                    name: 'focus_tools_pin',
+                    arguments: { pattern: 'ts_index' },
+                },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toBe('pinned ok');
+            expect(mockConfigToolsPinCommand).toHaveBeenCalledWith('ts_index');
+        });
+
+        it('focus_tools_unpin delegates to configToolsUnpinCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: {
+                    name: 'focus_tools_unpin',
+                    arguments: { pattern: 'ts_index' },
+                },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toBe('unpinned ok');
+            expect(mockConfigToolsUnpinCommand).toHaveBeenCalledWith('ts_index');
+        });
+
+        it('focus_tools_list delegates to configToolsListCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: { name: 'focus_tools_list', arguments: {} },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toContain('hidden');
+            expect(mockConfigToolsListCommand).toHaveBeenCalled();
+        });
+
+        it('focus_tools_clear delegates to configToolsClearCommand', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: { name: 'focus_tools_clear', arguments: {} },
+            });
+            expect(result.isError).toBeUndefined();
+            expect(result.content[0]?.text).toBe('cleared ok');
+            expect(mockConfigToolsClearCommand).toHaveBeenCalled();
+        });
+
+        it('focus_tools_hide returns isError when pattern is missing', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: { name: 'focus_tools_hide', arguments: {} },
+            });
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Missing or invalid pattern');
+        });
+
+        it('focus_tools_show returns isError when pattern is missing', async () => {
+            const handler = await getCallToolHandler();
+            const result = await handler({
+                params: { name: 'focus_tools_show', arguments: {} },
+            });
+            expect(result.isError).toBe(true);
+            expect(result.content[0]?.text).toContain('Missing or invalid pattern');
+        });
+
+        it('focus_tools_* are accessible even in bench mode (immune to bench mode skip)', async () => {
+            const originalEnv = process.env['FOCUS_BENCH_MODE'];
+            process.env['FOCUS_BENCH_MODE'] = 'true';
+            try {
+                const handler = await getCallToolHandler();
+                const result = await handler({
+                    params: {
+                        name: 'focus_tools_list',
+                        arguments: {},
+                    },
+                });
+                expect(result.isError).toBeUndefined();
+                expect(mockConfigToolsListCommand).toHaveBeenCalled();
+            } finally {
+                if (originalEnv === undefined) {
+                    delete process.env['FOCUS_BENCH_MODE'];
+                } else {
+                    process.env['FOCUS_BENCH_MODE'] = originalEnv;
+                }
+            }
+        });
     });
 });

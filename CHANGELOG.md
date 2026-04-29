@@ -1,5 +1,104 @@
 # @focus-mcp/cli
 
+## 2.2.0
+
+### Minor Changes
+
+- 01ef020: feat(cli): expose keywords and recommendedFor in focus_search MCP tool
+
+  The focus_search tool now returns a structured JSON block alongside the
+  formatted table, including keywords and recommendedFor per brick when
+  present. SearchCommandResult gains a bricks field for downstream use.
+  Full enrichment requires @focus-mcp/core >= 1.5.0 once released.
+
+## 2.1.0
+
+### Minor Changes
+
+- 422cb46: feat(cli): update notifier — warns when new cli or brick version is available
+
+## 2.0.0
+
+### Major Changes
+
+**BREAKING CHANGES — Migration required for existing users.**
+
+#### MCP tools renamed to `focus_<namespace>_<action>` pattern
+
+| Before (1.9.0)                              | After (2.0.0)                       |
+| ------------------------------------------- | ----------------------------------- |
+| `focus_install`                             | `focus_bricks_install`              |
+| `focus_remove`                              | `focus_bricks_remove`               |
+| `focus_search`                              | `focus_bricks_search`               |
+| `focus_load`                                | `focus_bricks_load`                 |
+| `focus_unload`                              | `focus_bricks_unload`               |
+| `focus_reload`                              | `focus_bricks_reload`               |
+| `focus_update`                              | `focus_bricks_update`               |
+| `focus_upgrade`                             | removed (use `focus_bricks_update`) |
+| `focus_tools` (singleton with `action` arg) | split into 6 distinct tools         |
+| _(new)_                                     | `focus_self_update`                 |
+
+The 6 new tools replacing `focus_tools`: `focus_tools_hide`, `focus_tools_show`, `focus_tools_pin`, `focus_tools_unpin`, `focus_tools_list`, `focus_tools_clear`.
+
+`focus_catalog_add`, `focus_catalog_list`, `focus_catalog_remove` are unchanged.
+
+#### `focus update` / `focus upgrade` now self-update the CLI
+
+- `focus update` / `focus upgrade` → self-update the CLI
+- `focus update --all` → self-update CLI + all installed bricks
+- `focus update <name>` → **ERROR** (use `focus bricks:update <name>`)
+- `focus bricks:update [name] [--all] [--check]` → update brick(s)
+
+#### New `bricks:` namespace
+
+`focus bricks:install`, `focus bricks:remove`, `focus bricks:list`,
+`focus bricks:search`, `focus bricks:update`, `focus bricks:load`, `focus bricks:unload`.
+
+Flat aliases (`add`, `remove`, `list`, `search`) remain as permanent back-compat.
+
+#### Migration
+
+- Update MCP tool names in AI client configs (`focus_install` → `focus_bricks_install`, etc.)
+- Replace `focus_tools { action: "hide", pattern: "..." }` with `focus_tools_hide { pattern: "..." }`
+- Replace `focus update <brick>` with `focus bricks:update <brick>`
+
+### Patch Changes
+
+- e45c4b1: chore(ci): auto-tag and create GitHub Release on stable publish
+
+## 1.9.0
+
+### Minor Changes
+
+- 205453e: Add tool visibility management to `focus start` — hide or pin tools without uninstalling bricks.
+
+  - `focus start --hide=<patterns>` hides matching tools at launch; `--pin=<patterns>` marks tools as `alwaysLoad`
+  - `~/.focus/config.json` `tools.hidden` and `tools.alwaysLoad` arrays for persistent config; CLI args override
+  - `focus config tools hide/show/pin/unpin/list/clear` subcommand to manage visibility from the terminal
+  - `focus_config` MCP tool lets agents manage their own toolset visibility from within the AI client
+  - `focus_config` itself is always visible regardless of the hidden list (deadlock protection)
+  - 5 essential meta tools (`focus_list`, `focus_load`, `focus_search`, `focus_install`, `focus_config`) carry `_meta.anthropic/alwaysLoad: true` by default
+
+- e13e2b5: Add `tools:` namespace commands (Symfony-style) + rename MCP tool `focus_config` → `focus_tools`.
+
+  New canonical command names:
+
+  - `focus tools:hide <pattern>` — hide tool (alias: `filter hide`)
+  - `focus tools:show <pattern>` — unhide tool (alias: `filter show`)
+  - `focus tools:pin <pattern>` — mark as alwaysLoad
+  - `focus tools:unpin <pattern>` — remove from alwaysLoad
+  - `focus tools:list` — show hidden + alwaysLoad lists (alias: `filter list`)
+  - `focus tools:clear` — reset both lists (alias: `filter clear`)
+
+  Also adds `catalog:` namespace aliases:
+
+  - `focus catalog:list`, `focus catalog:add`, `focus catalog:remove`
+
+  Old flat names (`filter hide`, `filter list`, etc.) remain as permanent aliases — no deprecation, no breaking change.
+
+  MCP tool rename: `focus_config` → `focus_tools` (actions: `hide`, `show`, `pin`, `unpin`, `list`, `clear`). `focus_tools` is immune to hidden lists.
+
+
 ## 1.8.1
 
 ### Patch Changes
