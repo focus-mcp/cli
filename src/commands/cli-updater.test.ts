@@ -1,12 +1,8 @@
 // SPDX-FileCopyrightText: 2026 FocusMCP contributors
 // SPDX-License-Identifier: MIT
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-    buildUpdateCommand,
-    cliUpdater,
-    detectPackageManager,
-} from './cli-updater.ts';
+import { afterEach, describe, expect, it } from 'vitest';
+import { buildUpdateCommand, cliUpdater, detectPackageManager } from './cli-updater.ts';
 
 describe('detectPackageManager', () => {
     const originalExecPath = process.env['npm_execpath'];
