@@ -1,5 +1,16 @@
 # @focus-mcp/cli
 
+## 2.2.0
+
+### Minor Changes
+
+- 01ef020: feat(cli): expose keywords and recommendedFor in focus_search MCP tool
+
+  The focus_search tool now returns a structured JSON block alongside the
+  formatted table, including keywords and recommendedFor per brick when
+  present. SearchCommandResult gains a bricks field for downstream use.
+  Full enrichment requires @focus-mcp/core >= 1.5.0 once released.
+
 ## 2.1.0
 
 ### Minor Changes
@@ -86,7 +97,6 @@ Flat aliases (`add`, `remove`, `list`, `search`) remain as permanent back-compat
   Old flat names (`filter hide`, `filter list`, etc.) remain as permanent aliases — no deprecation, no breaking change.
 
   MCP tool rename: `focus_config` → `focus_tools` (actions: `hide`, `show`, `pin`, `unpin`, `list`, `clear`). `focus_tools` is immune to hidden lists.
-
 
 ## 1.8.1
 
