@@ -30,7 +30,10 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: '@focus-mcp'
       - run: pnpm build
+      - name: Upgrade npm for OIDC Trusted Publishing support
+        run: npm install -g npm@latest
       - name: Publish with latest tag
         run: npm publish --access public 2>&1 || echo "  → skipped (already published?)"
+        # NODE_AUTH_TOKEN fallback: kept for rollback if Trusted Publisher not yet configured on npmjs.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

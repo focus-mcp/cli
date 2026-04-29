@@ -37,7 +37,10 @@ jobs:
           # Falls back gracefully when no changesets are pending (no-op).
           pnpm changeset version --snapshot dev || true
       - run: pnpm build
+      - name: Upgrade npm for OIDC Trusted Publishing support
+        run: npm install -g npm@latest
       - name: Publish with dev tag
         run: pnpm changeset publish --no-git-tag --tag dev
+        # NODE_AUTH_TOKEN fallback: kept for rollback if Trusted Publisher not yet configured on npmjs.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
