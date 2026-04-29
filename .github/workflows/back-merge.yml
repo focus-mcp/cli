@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: back-merge-${{ github.ref }}
@@ -41,20 +42,31 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Attempt back-merge from main
-        id: merge
+      - name: Check if already up to date
+        id: uptodate
         if: steps.check-skip.outputs.skip == 'false'
-        continue-on-error: true
         run: |
-          set -euo pipefail
           git fetch origin main
           if git merge-base --is-ancestor origin/main HEAD; then
-            echo "merged=false" >> $GITHUB_OUTPUT
+            echo "uptodate=true" >> $GITHUB_OUTPUT
             echo "Develop is already up to date with main — nothing to back-merge."
-            exit 0
+          else
+            echo "uptodate=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Attempt back-merge from main
+        id: merge
+        if: steps.check-skip.outputs.skip == 'false' && steps.uptodate.outputs.uptodate == 'false'
+        continue-on-error: true
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          BRANCH="chore/back-merge-${COMMIT_SHA}"
+          git checkout -b "$BRANCH"
           if git merge origin/main --no-edit -m "chore(back-merge): main → develop after release [skip ci]"; then
             echo "merged=true" >> $GITHUB_OUTPUT
+            echo "branch=$BRANCH" >> $GITHUB_OUTPUT
           else
             echo "merged=false" >> $GITHUB_OUTPUT
             echo "::warning ::Back-merge failed (conflicts). A manual PR is required."
@@ -62,9 +74,25 @@ jobs:
             exit 1
           fi
 
-      - name: Push develop
+      - name: Push back-merge branch
         if: steps.merge.outputs.merged == 'true'
-        run: git push origin develop
+        env:
+          BACK_MERGE_BRANCH: ${{ steps.merge.outputs.branch }}
+        run: git push origin "$BACK_MERGE_BRANCH"
+
+      - name: Open PR and enable auto-merge
+        if: steps.merge.outputs.merged == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          BACK_MERGE_BRANCH: ${{ steps.merge.outputs.branch }}
+        run: |
+          PR_URL=$(gh pr create \
+            --base develop \
+            --head "$BACK_MERGE_BRANCH" \
+            --title "chore: back-merge main → develop" \
+            --body "Automated back-merge of main into develop after release. Auto-merges once CI passes.")
+          echo "PR created: $PR_URL"
+          gh pr merge "$PR_URL" --squash --auto
 
       - name: Open PR if conflicts
         if: failure() && steps.merge.outcome == 'failure'
