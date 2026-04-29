@@ -1,5 +1,11 @@
 # @focus-mcp/cli
 
+## 2.1.0
+
+### Minor Changes
+
+- 422cb46: feat(cli): update notifier — warns when new cli or brick version is available
+
 ## 2.0.0
 
 ### Major Changes
@@ -80,7 +86,6 @@ Flat aliases (`add`, `remove`, `list`, `search`) remain as permanent back-compat
   Old flat names (`filter hide`, `filter list`, etc.) remain as permanent aliases — no deprecation, no breaking change.
 
   MCP tool rename: `focus_config` → `focus_tools` (actions: `hide`, `show`, `pin`, `unpin`, `list`, `clear`). `focus_tools` is immune to hidden lists.
-
 
 ## 1.8.1
 
