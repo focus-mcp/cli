@@ -8,18 +8,18 @@
 
 #### MCP tools renamed to `focus_<namespace>_<action>` pattern
 
-| Before (1.9.0) | After (2.0.0) |
-|---|---|
-| `focus_install` | `focus_bricks_install` |
-| `focus_remove` | `focus_bricks_remove` |
-| `focus_search` | `focus_bricks_search` |
-| `focus_load` | `focus_bricks_load` |
-| `focus_unload` | `focus_bricks_unload` |
-| `focus_reload` | `focus_bricks_reload` |
-| `focus_update` | `focus_bricks_update` |
-| `focus_upgrade` | removed (use `focus_bricks_update`) |
-| `focus_tools` (singleton with `action` arg) | split into 6 distinct tools |
-| *(new)* | `focus_self_update` |
+| Before (1.9.0)                              | After (2.0.0)                       |
+| ------------------------------------------- | ----------------------------------- |
+| `focus_install`                             | `focus_bricks_install`              |
+| `focus_remove`                              | `focus_bricks_remove`               |
+| `focus_search`                              | `focus_bricks_search`               |
+| `focus_load`                                | `focus_bricks_load`                 |
+| `focus_unload`                              | `focus_bricks_unload`               |
+| `focus_reload`                              | `focus_bricks_reload`               |
+| `focus_update`                              | `focus_bricks_update`               |
+| `focus_upgrade`                             | removed (use `focus_bricks_update`) |
+| `focus_tools` (singleton with `action` arg) | split into 6 distinct tools         |
+| _(new)_                                     | `focus_self_update`                 |
 
 The 6 new tools replacing `focus_tools`: `focus_tools_hide`, `focus_tools_show`, `focus_tools_pin`, `focus_tools_unpin`, `focus_tools_list`, `focus_tools_clear`.
 
@@ -44,6 +44,10 @@ Flat aliases (`add`, `remove`, `list`, `search`) remain as permanent back-compat
 - Update MCP tool names in AI client configs (`focus_install` → `focus_bricks_install`, etc.)
 - Replace `focus_tools { action: "hide", pattern: "..." }` with `focus_tools_hide { pattern: "..." }`
 - Replace `focus update <brick>` with `focus bricks:update <brick>`
+
+### Patch Changes
+
+- e45c4b1: chore(ci): auto-tag and create GitHub Release on stable publish
 
 ## 1.9.0
 
