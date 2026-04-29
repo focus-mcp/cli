@@ -30,15 +30,7 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: '@focus-mcp'
       - run: pnpm build
-      - name: Publish with latest tag (or promote if already published)
-        run: |
-          VERSION=$(node -e "console.log(require('./package.json').version)")
-          if npm publish --access public 2>&1; then
-            echo "Published @focus-mcp/cli@${VERSION} with latest tag"
-          else
-            echo "Version ${VERSION} already published, promoting to latest tag..."
-            npm dist-tag add "@focus-mcp/cli@${VERSION}" latest
-            echo "Promoted @focus-mcp/cli@${VERSION} to latest"
-          fi
+      - name: Publish with latest tag
+        run: npm publish --access public 2>&1 || echo "  → skipped (already published?)"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

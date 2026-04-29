@@ -31,13 +31,22 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
           scope: '@focus-mcp'
-      - name: Apply changeset snapshot version
+      - name: Check for pending changesets
+        id: pending
         run: |
-          # Produces versions like 1.9.0-dev-20260428-abc1234 from pending changesets.
-          # Falls back gracefully when no changesets are pending (no-op).
-          pnpm changeset version --snapshot dev || true
-      - run: pnpm build
+          PENDING=$(ls .changeset/*.md 2>/dev/null | grep -v "^.changeset/README" | wc -l || echo 0)
+          echo "count=$PENDING" >> $GITHUB_OUTPUT
+          if [ "$PENDING" -eq 0 ]; then
+            echo "No pending changesets — skipping dev publish."
+          fi
+      - name: Apply changeset snapshot version
+        if: steps.pending.outputs.count != '0'
+        run: pnpm changeset version --snapshot dev
+      - name: Build
+        if: steps.pending.outputs.count != '0'
+        run: pnpm build
       - name: Publish with dev tag
+        if: steps.pending.outputs.count != '0'
         run: pnpm changeset publish --no-git-tag --tag dev
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

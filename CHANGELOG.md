@@ -1,5 +1,37 @@
 # @focus-mcp/cli
 
+## 1.9.0
+
+### Minor Changes
+
+- 205453e: Add tool visibility management to `focus start` — hide or pin tools without uninstalling bricks.
+
+  - `focus start --hide=<patterns>` hides matching tools at launch; `--pin=<patterns>` marks tools as `alwaysLoad`
+  - `~/.focus/config.json` `tools.hidden` and `tools.alwaysLoad` arrays for persistent config; CLI args override
+  - `focus config tools hide/show/pin/unpin/list/clear` subcommand to manage visibility from the terminal
+  - `focus_config` MCP tool lets agents manage their own toolset visibility from within the AI client
+  - `focus_config` itself is always visible regardless of the hidden list (deadlock protection)
+  - 5 essential meta tools (`focus_list`, `focus_load`, `focus_search`, `focus_install`, `focus_config`) carry `_meta.anthropic/alwaysLoad: true` by default
+
+- e13e2b5: Add `tools:` namespace commands (Symfony-style) + rename MCP tool `focus_config` → `focus_tools`.
+
+  New canonical command names:
+
+  - `focus tools:hide <pattern>` — hide tool (alias: `filter hide`)
+  - `focus tools:show <pattern>` — unhide tool (alias: `filter show`)
+  - `focus tools:pin <pattern>` — mark as alwaysLoad
+  - `focus tools:unpin <pattern>` — remove from alwaysLoad
+  - `focus tools:list` — show hidden + alwaysLoad lists (alias: `filter list`)
+  - `focus tools:clear` — reset both lists (alias: `filter clear`)
+
+  Also adds `catalog:` namespace aliases:
+
+  - `focus catalog:list`, `focus catalog:add`, `focus catalog:remove`
+
+  Old flat names (`filter hide`, `filter list`, etc.) remain as permanent aliases — no deprecation, no breaking change.
+
+  MCP tool rename: `focus_config` → `focus_tools` (actions: `hide`, `show`, `pin`, `unpin`, `list`, `clear`). `focus_tools` is immune to hidden lists.
+
 ## 1.8.1
 
 ### Patch Changes
