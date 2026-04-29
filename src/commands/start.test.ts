@@ -356,7 +356,7 @@ describe('startCommand', () => {
         const handler = listToolsCall[1] as () => Promise<{ tools: unknown[] }>;
         const result = await handler();
 
-        // Should include the brick tool + 19 internal tools (bricks: + catalog: + self: + tools:)
+        // Should include the brick tool + 20 internal tools (bricks: + catalog: + self: + tools: + check_updates)
         expect(result.tools).toEqual(
             expect.arrayContaining([
                 {
@@ -382,9 +382,10 @@ describe('startCommand', () => {
                 expect.objectContaining({ name: 'focus_tools_unpin' }),
                 expect.objectContaining({ name: 'focus_tools_list' }),
                 expect.objectContaining({ name: 'focus_tools_clear' }),
+                expect.objectContaining({ name: 'focus_check_updates' }),
             ]),
         );
-        expect((result.tools as unknown[]).length).toBe(19);
+        expect((result.tools as unknown[]).length).toBe(20);
 
         void promise;
     });

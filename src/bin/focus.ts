@@ -22,6 +22,7 @@ import { parseCenterJson, parseCenterLock } from '../center.ts';
 import { addManyCommand } from '../commands/add.ts';
 import { browseCommand } from '../commands/browse.ts';
 import { catalogCommand } from '../commands/catalog.ts';
+import { runUpdateCheck } from '../commands/check-updates.ts';
 import { cliUpdater } from '../commands/cli-updater.ts';
 import {
     configToolsClearCommand,
@@ -87,8 +88,12 @@ Commands:
   help                         Print this help
 
 Options:
-  -h, --help       Print help
-  -v, --version    Print the CLI version
+  -h, --help             Print help
+  -v, --version          Print the CLI version
+  --no-update-check      Skip update notifications for this invocation
+
+Environment:
+  FOCUS_NO_UPDATE_NOTIFY=1  Permanently disable update notifications
 `;
 
 function printHelp(): void {
@@ -580,6 +585,7 @@ async function main(argv: string[]): Promise<number> {
         options: {
             help: { type: 'boolean', short: 'h' },
             version: { type: 'boolean', short: 'v' },
+            'no-update-check': { type: 'boolean' },
         },
     });
 
@@ -593,6 +599,10 @@ async function main(argv: string[]): Promise<number> {
     const [command] = positionals;
     const commandIndex = argv.indexOf(command ?? '');
     const rest = commandIndex >= 0 ? argv.slice(commandIndex + 1) : [];
+
+    // Fire-and-forget update check (non-blocking, skip for help/version/update)
+    const cliVersion = process.env['CLI_VERSION'] ?? '0.0.0';
+    runUpdateCheck(command !== undefined ? [command, ...rest] : [], cliVersion);
 
     if (!command || command === 'help' || values['help']) {
         printHelp();
