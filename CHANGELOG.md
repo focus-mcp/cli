@@ -87,6 +87,7 @@ Flat aliases (`add`, `remove`, `list`, `search`) remain as permanent back-compat
 
   MCP tool rename: `focus_config` → `focus_tools` (actions: `hide`, `show`, `pin`, `unpin`, `list`, `clear`). `focus_tools` is immune to hidden lists.
 
+
 ## 1.8.1
 
 ### Patch Changes

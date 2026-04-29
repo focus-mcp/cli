@@ -1480,6 +1480,14 @@ describe('startCommand', () => {
                 mockSearchCommand.mockResolvedValue({
                     output: 'brick-a  1.0.0  catalog',
                     errors: [],
+                    bricks: [
+                        {
+                            name: 'brick-a',
+                            version: '1.0.0',
+                            catalog: 'catalog',
+                            description: 'A brick',
+                        },
+                    ],
                 });
 
                 const { startCommand } = await import('./start.ts');
@@ -1503,6 +1511,7 @@ describe('startCommand', () => {
 
                 expect(result.isError).toBeUndefined();
                 expect(result.content[0]?.text).toBe('brick-a  1.0.0  catalog');
+                expect(result.content[1]?.text).toContain('"bricks"');
                 expect(mockSearchCommand).toHaveBeenCalledWith(
                     expect.objectContaining({ query: 'git' }),
                 );
@@ -1514,6 +1523,7 @@ describe('startCommand', () => {
                 mockSearchCommand.mockResolvedValue({
                     output: 'results',
                     errors: ['https://example.com: fetch failed'],
+                    bricks: [],
                 });
 
                 const { startCommand } = await import('./start.ts');
@@ -1593,6 +1603,52 @@ describe('startCommand', () => {
                 expect(result.isError).toBe(true);
                 expect(result.content[0]?.text).toContain('Search failed');
                 expect(result.content[0]?.text).toContain('network error');
+
+                void promise;
+            });
+
+            it('includes keywords and recommendedFor in the structured JSON response', async () => {
+                mockSearchCommand.mockResolvedValue({
+                    output: 'enriched  1.0.0  catalog  Enriched brick',
+                    errors: [],
+                    bricks: [
+                        {
+                            name: 'enriched',
+                            version: '1.0.0',
+                            catalog: 'catalog',
+                            description: 'Enriched brick',
+                            keywords: ['typescript', 'ast'],
+                            recommendedFor: ['react', 'next'],
+                        },
+                    ],
+                });
+
+                const { startCommand } = await import('./start.ts');
+                const promise = startCommand([]);
+                await new Promise((r) => setTimeout(r, 10));
+
+                const callToolCall = mockSetRequestHandler.mock.calls.find(
+                    (call) => call[0] === 'CallToolRequestSchema',
+                );
+                if (!callToolCall) throw new Error('CallTool handler not registered');
+                const handler = callToolCall[1] as (req: {
+                    params: { name: string; arguments?: Record<string, unknown> };
+                }) => Promise<{
+                    content: Array<{ type: string; text: string }>;
+                    isError?: boolean;
+                }>;
+
+                const result = await handler({
+                    params: { name: 'focus_bricks_search', arguments: { query: 'enriched' } },
+                });
+
+                expect(result.isError).toBeUndefined();
+                const jsonText = result.content[1]?.text ?? '';
+                const parsed = JSON.parse(jsonText) as { bricks: unknown[] };
+                expect(parsed.bricks).toHaveLength(1);
+                const brick = parsed.bricks[0] as Record<string, unknown>;
+                expect(brick['keywords']).toEqual(['typescript', 'ast']);
+                expect(brick['recommendedFor']).toEqual(['react', 'next']);
 
                 void promise;
             });

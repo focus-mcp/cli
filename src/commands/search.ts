@@ -10,6 +10,7 @@
  */
 
 import {
+    type AggregatedBrick,
     aggregateCatalogs,
     createDefaultStore,
     fetchAllCatalogs,
@@ -30,9 +31,25 @@ export interface SearchCommandInput {
     readonly io: SearchIO;
 }
 
+/**
+ * Enriched brick result that includes optional discovery fields.
+ * keywords and recommendedFor are available when the brick manifest
+ * declares them (requires @focus-mcp/core >= 1.5.0 at runtime).
+ */
+export interface SearchResultBrick {
+    readonly name: string;
+    readonly version: string;
+    readonly catalog: string;
+    readonly description: string;
+    readonly keywords?: readonly string[];
+    readonly recommendedFor?: readonly string[];
+}
+
 export interface SearchCommandResult {
     readonly output: string;
     readonly errors: readonly string[];
+    /** Structured brick list, suitable for MCP tool JSON responses. */
+    readonly bricks: readonly SearchResultBrick[];
 }
 
 /**
@@ -53,7 +70,11 @@ export async function searchCommand({
 
     const enabled = getEnabledSources(store);
     if (enabled.length === 0) {
-        return { output: 'No enabled catalog sources. Use `focus catalog add <url>`.', errors: [] };
+        return {
+            output: 'No enabled catalog sources. Use `focus catalog add <url>`.',
+            errors: [],
+            bricks: [],
+        };
     }
 
     const urls = enabled.map((s) => s.url);
@@ -66,7 +87,7 @@ export async function searchCommand({
     ];
 
     const trimmedQuery = query.trim();
-    const found =
+    const found: readonly AggregatedBrick[] =
         trimmedQuery.length === 0 ? aggregated.bricks : searchBricks(aggregated, trimmedQuery);
 
     if (found.length === 0) {
@@ -76,30 +97,38 @@ export async function searchCommand({
                     ? 'No bricks available.'
                     : `No bricks matching "${trimmedQuery}".`,
             errors: allErrors,
+            bricks: [],
         };
     }
 
-    const rows = found.map((b) => ({
+    const bricks: SearchResultBrick[] = found.map((b) => toBrickResult(b));
+    const lines = formatTable(bricks);
+    return { output: lines.join('\n'), errors: allErrors, bricks };
+}
+
+// ---------- helpers ----------
+
+function toBrickResult(b: AggregatedBrick): SearchResultBrick {
+    // keywords and recommendedFor are available at runtime when core >= 1.5.0.
+    // They are not yet in the 1.4.0 type definitions, so we access them safely.
+    const raw = b as AggregatedBrick & {
+        keywords?: readonly string[];
+        recommendedFor?: readonly string[];
+    };
+    return {
         name: b.name,
         version: b.version,
         catalog: b.catalogName,
         description: b.description,
-    }));
-    const lines = formatTable(rows);
-    return { output: lines.join('\n'), errors: allErrors };
+        ...(raw.keywords !== undefined ? { keywords: raw.keywords } : {}),
+        ...(raw.recommendedFor !== undefined ? { recommendedFor: raw.recommendedFor } : {}),
+    };
 }
 
 // ---------- formatting ----------
 
-interface Row {
-    readonly name: string;
-    readonly version: string;
-    readonly catalog: string;
-    readonly description: string;
-}
-
-function formatTable(bricks: readonly Row[]): string[] {
-    const header: Row = {
+function formatTable(bricks: readonly SearchResultBrick[]): string[] {
+    const header = {
         name: 'NAME',
         version: 'VERSION',
         catalog: 'CATALOG',
