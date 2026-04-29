@@ -92,7 +92,8 @@ jobs:
             --title "chore: back-merge main → develop" \
             --body "Automated back-merge of main into develop after release. Auto-merges once CI passes.")
           echo "PR created: $PR_URL"
-          gh pr merge "$PR_URL" --squash --auto --delete-branch
+          gh pr merge "$PR_URL" --squash --auto --delete-branch || \
+            gh pr merge "$PR_URL" --squash --delete-branch
 
       - name: Open PR if conflicts
         if: failure() && steps.merge.outcome == 'failure'
