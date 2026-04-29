@@ -27,5 +27,7 @@ export default {
         'header-max-length': [2, 'always', 100],
         'body-leading-blank': [2, 'always'],
         'footer-leading-blank': [2, 'always'],
+        // Squash-merge bodies can embed PR descriptions with long lines; disable the limit.
+        'body-max-line-length': [0],
     },
 };

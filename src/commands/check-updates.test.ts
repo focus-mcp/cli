@@ -3,16 +3,20 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+    checkUpdatesCommand,
     formatUpdateWarning,
     runUpdateCheck,
     shouldSkipUpdateCheck,
-    type CheckUpdatesInput,
-    checkUpdatesCommand,
 } from './check-updates.ts';
 
 // Mock @focus-mcp/core checkForUpdates
 vi.mock('@focus-mcp/core', () => ({
     checkForUpdates: vi.fn(),
+}));
+
+// Mock check-updates-io makeNodeIO (io injected but irrelevant in unit tests)
+vi.mock('./check-updates-io.ts', () => ({
+    makeNodeIO: vi.fn(() => ({})),
 }));
 
 import { checkForUpdates } from '@focus-mcp/core';
@@ -206,12 +210,19 @@ describe('checkUpdatesCommand', () => {
 
     it('returns full result from checkForUpdates', async () => {
         mockCheckForUpdates.mockResolvedValue({
-            cliUpdate: { current: '2.0.0', latest: '2.1.0', command: 'npm i -g @focus-mcp/cli@latest' },
+            cliUpdate: {
+                current: '2.0.0',
+                latest: '2.1.0',
+                command: 'npm i -g @focus-mcp/cli@latest',
+            },
             bricksUpdates: [{ name: 'treesitter', current: '0.5.1', latest: '0.6.0' }],
             fromCache: false,
         });
 
-        const result = await checkUpdatesCommand({ include_cli: true, include_bricks: true }, '2.0.0');
+        const result = await checkUpdatesCommand(
+            { include_cli: true, include_bricks: true },
+            '2.0.0',
+        );
 
         expect(result.cliUpdate).toMatchObject({ current: '2.0.0', latest: '2.1.0' });
         expect(result.bricksUpdates).toHaveLength(1);

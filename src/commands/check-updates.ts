@@ -9,11 +9,9 @@
  *   - `checkUpdatesCommand()` : pure-output version for the `focus_check_updates` MCP tool
  */
 
-// NOTE: UpdateCheckResult and checkForUpdates are exported from @focus-mcp/core ^1.4.0.
-// This file requires core 1.4.0 (feat/update-checker PR). The types below
-// will be imported from core once that version is released.
 import type { UpdateCheckResult } from '@focus-mcp/core';
 import { checkForUpdates } from '@focus-mcp/core';
+import { makeNodeIO } from './check-updates-io.ts';
 
 // ---------- skip conditions ----------
 
@@ -52,7 +50,10 @@ export function formatUpdateWarning(result: UpdateCheckResult): string {
     if (result.bricksUpdates && result.bricksUpdates.length > 0) {
         const count = result.bricksUpdates.length;
         const brickList = result.bricksUpdates
-            .map((b: { name: string; current: string; latest: string }) => `${b.name} (${b.current} → ${b.latest})`)
+            .map(
+                (b: { name: string; current: string; latest: string }) =>
+                    `${b.name} (${b.current} → ${b.latest})`,
+            )
             .join(', ');
         lines.push(
             `⚠ ${count.toString()} ${count === 1 ? 'brick has an update' : 'bricks have updates'}: ${brickList}`,
@@ -83,6 +84,7 @@ export function runUpdateCheck(argv: string[], cliCurrentVersion: string): void 
         includeCli: true,
         includeBricks: true,
         cliCurrentVersion,
+        io: makeNodeIO(),
     })
         .then((result: UpdateCheckResult) => {
             const warning = formatUpdateWarning(result);
@@ -129,6 +131,7 @@ export async function checkUpdatesCommand(
             includeCli: input.include_cli ?? true,
             includeBricks: input.include_bricks ?? true,
             cliCurrentVersion,
+            io: makeNodeIO(),
         });
 
         return {

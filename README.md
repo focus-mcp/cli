@@ -115,6 +115,84 @@ focus info echo       # Show details for a specific brick
 | `?` | Toggle help overlay |
 | `q` / `Esc` | Quit |
 
+## Filtering exposed tools
+
+By default, `focus start` exposes all tools from every loaded brick plus the focus management
+tools (`focus_*`). You can hide specific tools using a blacklist.
+
+### Per-launch: `--hide`
+
+```bash
+# Hide a single tool
+focus start --hide=sym_get
+
+# Hide an entire family with a glob
+focus start --hide="focus_*"
+
+# Hide multiple patterns (comma-separated)
+focus start --hide="sym_get,ts_cleanup"
+```
+
+Patterns support a trailing `*` glob (`focus_*` matches `focus_install`, `focus_list`, etc.).
+Exact names are also accepted.
+
+> **Note:** `focus_tools` is always visible regardless of the hidden list, so you can always
+> manage tool visibility from within your AI client.
+
+### Persistent config: `~/.focus/config.json`
+
+Add a `tools` section to persist filters across sessions:
+
+```json
+{
+    "tools": {
+        "hidden": ["sym_get", "fo_delete"],
+        "alwaysLoad": ["ts_index"]
+    }
+}
+```
+
+CLI flags override the config file. If neither is set, all tools are exposed (default).
+
+Add `--pin=<patterns>` to mark tools as always-loaded (surfaced as `_meta.anthropic/alwaysLoad: true` in MCP responses):
+
+```bash
+focus start --pin="ts_index,sym_find"
+```
+
+### Manage from the terminal: `focus tools:`
+
+```bash
+focus tools:list               # show current hidden + alwaysLoad lists
+focus tools:hide sym_get       # add sym_get to the hidden list
+focus tools:hide "focus_*"     # hide an entire family (glob)
+focus tools:show sym_get       # remove sym_get from the hidden list
+focus tools:pin ts_index       # mark ts_index as alwaysLoad
+focus tools:unpin ts_index     # remove ts_index from alwaysLoad
+focus tools:clear              # reset both lists
+
+# Legacy aliases (permanent, no deprecation):
+focus filter list
+focus filter hide sym_get
+```
+
+Changes are written to `~/.focus/config.json` and take effect on the next `focus start`.
+
+### From your AI client: `focus_tools` MCP tool
+
+The `focus_tools` MCP tool lets your AI agent manage tool visibility directly:
+
+```
+focus_tools action=hide   pattern=sym_get
+focus_tools action=show   pattern=sym_get
+focus_tools action=pin    pattern=ts_index
+focus_tools action=unpin  pattern=ts_index
+focus_tools action=list
+focus_tools action=clear
+```
+
+Restart `focus start` (or reload your MCP client) to apply changes.
+
 ## Architecture
 
 ```
