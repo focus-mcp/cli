@@ -20,6 +20,7 @@ import { parseCenterJson } from '../center.ts';
 import { FilesystemBrickSource } from '../source/filesystem-source.ts';
 import { addCommand } from './add.ts';
 import { catalogCommand } from './catalog.ts';
+import { checkUpdatesCommand, runUpdateCheck } from './check-updates.ts';
 import { removeCommand } from './remove.ts';
 import { searchCommand } from './search.ts';
 import { upgradeCommand } from './upgrade.ts';
@@ -288,6 +289,26 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                           url: { type: 'string', description: 'Catalog source URL to remove' },
                       },
                       required: ['url'],
+                      additionalProperties: false,
+                  },
+              },
+              {
+                  name: 'focus_check_updates',
+                  description:
+                      'Check if a newer version of @focus-mcp/cli or installed bricks is available. ' +
+                      'Results are cached for 24h. Call explicitly to force a fresh check.',
+                  inputSchema: {
+                      type: 'object',
+                      properties: {
+                          include_cli: {
+                              type: 'boolean',
+                              description: 'Check @focus-mcp/cli version (default true)',
+                          },
+                          include_bricks: {
+                              type: 'boolean',
+                              description: 'Check installed bricks against catalog (default true)',
+                          },
+                      },
                       additionalProperties: false,
                   },
               },
@@ -672,6 +693,31 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                     };
                 }
             } // end focus_catalog_remove
+
+            if (name === 'focus_check_updates') {
+                try {
+                    const rawArgs = args as Record<string, unknown> | undefined;
+                    const cliVersion = process.env['CLI_VERSION'] ?? '0.0.0';
+                    const result = await checkUpdatesCommand(
+                        {
+                            include_cli: rawArgs?.['include_cli'] !== false,
+                            include_bricks: rawArgs?.['include_bricks'] !== false,
+                        },
+                        cliVersion,
+                    );
+                    return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `focus_check_updates failed: ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+            } // end focus_check_updates
         } // end !isBenchMode
 
         // Brick tools (existing dispatch)
@@ -760,4 +806,8 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         await server.connect(transport);
         process.stderr.write('FocusMCP stdio MCP server started\n');
     }
+
+    // Fire-and-forget: check for updates and log a warning on stderr (non-blocking)
+    const cliVersion = process.env['CLI_VERSION'] ?? '0.0.0';
+    runUpdateCheck([], cliVersion);
 }
