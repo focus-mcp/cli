@@ -20,7 +20,6 @@ import { parseCenterJson } from '../center.ts';
 import { FilesystemBrickSource } from '../source/filesystem-source.ts';
 import { addCommand } from './add.ts';
 import { catalogCommand } from './catalog.ts';
-import { cliUpdater } from './cli-updater.ts';
 import {
     configToolsClearCommand,
     configToolsHideCommand,
@@ -90,14 +89,14 @@ export function matchesPattern(toolName: string, pattern: string): boolean {
 /**
  * Returns true when `toolName` is hidden by the given hidden-patterns list.
  *
- * Special case: the 6 focus_tools_* tools are always visible regardless of the hidden list,
+ * Special case: `focus_tools` is always visible regardless of the hidden list,
  * so the agent can always re-manage the config (avoids a deadlock situation).
  *
  * When `hiddenPatterns` is null (no filter configured), no tools are hidden.
  */
 export function isHiddenTool(toolName: string, hiddenPatterns: string[] | null): boolean {
-    // focus_tools_* are immune — always visible (tool visibility management must always work)
-    if (toolName.startsWith('focus_tools_')) return false;
+    // focus_tools is immune — always visible
+    if (toolName === 'focus_tools') return false;
     if (!hiddenPatterns) return false;
     return hiddenPatterns.some((p) => matchesPattern(toolName, p));
 }
@@ -261,15 +260,14 @@ export async function startCommand(argv: string[] = []): Promise<void> {
     const metaTools = isBenchMode
         ? []
         : [
-              // ---------- bricks namespace ----------
               metaTool(
-                  'focus_bricks_list',
+                  'focus_list',
                   'List all loaded bricks and their tools',
                   { type: 'object', properties: {}, additionalProperties: false },
                   true,
               ),
               metaTool(
-                  'focus_bricks_load',
+                  'focus_load',
                   'Load (activate) an installed brick — its tools become available immediately',
                   {
                       type: 'object',
@@ -280,7 +278,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                   true,
               ),
               metaTool(
-                  'focus_bricks_unload',
+                  'focus_unload',
                   'Unload (deactivate) a running brick — its tools are removed immediately',
                   {
                       type: 'object',
@@ -292,7 +290,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                   },
               ),
               metaTool(
-                  'focus_bricks_reload',
+                  'focus_reload',
                   'Reload a brick — stop, reimport from disk, restart. Tools are updated immediately.',
                   {
                       type: 'object',
@@ -304,7 +302,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                   },
               ),
               metaTool(
-                  'focus_bricks_search',
+                  'focus_search',
                   'Search the marketplace catalog for available bricks',
                   {
                       type: 'object',
@@ -315,7 +313,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                   true,
               ),
               metaTool(
-                  'focus_bricks_install',
+                  'focus_install',
                   'Install a brick from the marketplace catalog',
                   {
                       type: 'object',
@@ -331,7 +329,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                   },
                   true,
               ),
-              metaTool('focus_bricks_remove', 'Remove an installed brick', {
+              metaTool('focus_remove', 'Remove an installed brick', {
                   type: 'object',
                   properties: {
                       name: { type: 'string', description: 'Brick name to remove' },
@@ -340,7 +338,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                   additionalProperties: false,
               }),
               metaTool(
-                  'focus_bricks_update',
+                  'focus_update',
                   'Update one or all installed bricks to their latest catalog version',
                   {
                       type: 'object',
@@ -364,7 +362,31 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                       additionalProperties: false,
                   },
               ),
-              // ---------- catalog namespace ----------
+              metaTool(
+                  'focus_upgrade',
+                  'Upgrade one or all installed bricks to their latest catalog version (alias for focus_update)',
+                  {
+                      type: 'object',
+                      properties: {
+                          brick: {
+                              type: 'string',
+                              description:
+                                  'Brick name to upgrade (optional — upgrades all if omitted)',
+                          },
+                          all: {
+                              type: 'boolean',
+                              description:
+                                  'Upgrade all installed bricks (default when brick is omitted)',
+                          },
+                          check: {
+                              type: 'boolean',
+                              description:
+                                  'Dry-run: list upgradable bricks without applying changes',
+                          },
+                      },
+                      additionalProperties: false,
+                  },
+              ),
               metaTool('focus_catalog_add', 'Add a catalog source URL', {
                   type: 'object',
                   properties: {
@@ -386,108 +408,32 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                   required: ['url'],
                   additionalProperties: false,
               }),
-              // ---------- self namespace ----------
+              // focus_tools: always visible regardless of hidden list (immune to filtering)
+              // alwaysLoad hint ensures the agent never loses access to tool management
               metaTool(
-                  'focus_self_update',
-                  'Get the command to self-update the FocusMCP CLI to the latest version. ' +
-                      'Returns the shell command to run (the server cannot restart itself). ' +
-                      'Optionally includes the list of bricks to update.',
+                  'focus_tools',
+                  'Manage FocusMCP tool visibility. Hide/show tools by name or glob, pin tools as ' +
+                      'alwaysLoad, or list/clear the config. Note: focus_tools itself is always ' +
+                      'visible regardless of the hidden list.',
                   {
                       type: 'object',
                       properties: {
-                          include_bricks: {
-                              type: 'boolean',
+                          action: {
+                              type: 'string',
+                              enum: ['hide', 'show', 'pin', 'unpin', 'list', 'clear'],
                               description:
-                                  'If true, also include the list of installed bricks to update',
+                                  'hide: add to hidden list; show: remove from hidden; ' +
+                                  'pin: add to alwaysLoad; unpin: remove from alwaysLoad; ' +
+                                  'list: show both lists; clear: reset both lists',
                           },
-                      },
-                      additionalProperties: false,
-                  },
-                  true,
-              ),
-              // ---------- tools namespace — 6 distinct tools (always visible, immune to filter) ----------
-              metaTool(
-                  'focus_tools_hide',
-                  'Hide a tool or glob pattern — hidden tools are filtered from tools/list responses. ' +
-                      'focus_tools_* tools are always visible regardless of the hidden list.',
-                  {
-                      type: 'object',
-                      properties: {
                           pattern: {
                               type: 'string',
                               description:
-                                  'Tool name or glob pattern to hide (e.g. "sym_get" or "focus_*")',
+                                  'Tool name or glob pattern (e.g. "sym_get" or "focus_*"). ' +
+                                  'Required for hide / show / pin / unpin.',
                           },
                       },
-                      required: ['pattern'],
-                      additionalProperties: false,
-                  },
-                  true,
-              ),
-              metaTool(
-                  'focus_tools_show',
-                  'Unhide a tool or glob pattern — remove it from the hidden list.',
-                  {
-                      type: 'object',
-                      properties: {
-                          pattern: {
-                              type: 'string',
-                              description: 'Tool name or glob pattern to unhide',
-                          },
-                      },
-                      required: ['pattern'],
-                      additionalProperties: false,
-                  },
-                  true,
-              ),
-              metaTool(
-                  'focus_tools_pin',
-                  'Pin a tool — mark it with alwaysLoad so MCP clients keep it always loaded.',
-                  {
-                      type: 'object',
-                      properties: {
-                          pattern: {
-                              type: 'string',
-                              description: 'Tool name or glob pattern to pin as alwaysLoad',
-                          },
-                      },
-                      required: ['pattern'],
-                      additionalProperties: false,
-                  },
-                  true,
-              ),
-              metaTool(
-                  'focus_tools_unpin',
-                  'Unpin a tool — remove it from the alwaysLoad list.',
-                  {
-                      type: 'object',
-                      properties: {
-                          pattern: {
-                              type: 'string',
-                              description: 'Tool name or glob pattern to unpin',
-                          },
-                      },
-                      required: ['pattern'],
-                      additionalProperties: false,
-                  },
-                  true,
-              ),
-              metaTool(
-                  'focus_tools_list',
-                  'List the current hidden and alwaysLoad tool patterns from ~/.focus/config.json.',
-                  {
-                      type: 'object',
-                      properties: {},
-                      additionalProperties: false,
-                  },
-                  true,
-              ),
-              metaTool(
-                  'focus_tools_clear',
-                  'Reset both the hidden and alwaysLoad lists in ~/.focus/config.json.',
-                  {
-                      type: 'object',
-                      properties: {},
+                      required: ['action'],
                       additionalProperties: false,
                   },
                   true,
@@ -555,7 +501,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
         // fall through to the brick router (which will return an unknown-tool error).
         if (!isBenchMode) {
             // Internal tools — handled before dispatching to brick router
-            if (name === 'focus_bricks_list') {
+            if (name === 'focus_list') {
                 const bricks = focusMcp.registry.getBricks();
                 if (bricks.length === 0) {
                     return { content: [{ type: 'text' as const, text: 'No bricks loaded.' }] };
@@ -569,7 +515,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
             }
 
-            if (name === 'focus_bricks_load') {
+            if (name === 'focus_load') {
                 const brickName = (args as Record<string, unknown>)?.['name'];
                 if (typeof brickName !== 'string' || brickName.trim() === '') {
                     return {
@@ -619,7 +565,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 }
             }
 
-            if (name === 'focus_bricks_unload') {
+            if (name === 'focus_unload') {
                 const brickName = (args as Record<string, unknown>)?.['name'];
                 if (typeof brickName !== 'string' || brickName.trim() === '') {
                     return {
@@ -664,7 +610,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 }
             }
 
-            if (name === 'focus_bricks_reload') {
+            if (name === 'focus_reload') {
                 const brickName = (args as Record<string, unknown>)?.['name'];
                 if (typeof brickName !== 'string' || brickName.trim() === '') {
                     return {
@@ -714,7 +660,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 }
             }
 
-            if (name === 'focus_bricks_search') {
+            if (name === 'focus_search') {
                 const query = (args as Record<string, unknown>)?.['query'];
                 if (typeof query !== 'string') {
                     return {
@@ -746,7 +692,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 }
             }
 
-            if (name === 'focus_bricks_install') {
+            if (name === 'focus_install') {
                 const brickName = (args as Record<string, unknown>)?.['name'];
                 if (typeof brickName !== 'string' || brickName.trim() === '') {
                     return {
@@ -777,7 +723,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 }
             }
 
-            if (name === 'focus_bricks_remove') {
+            if (name === 'focus_remove') {
                 const brickName = (args as Record<string, unknown>)?.['name'];
                 if (typeof brickName !== 'string' || brickName.trim() === '') {
                     return {
@@ -804,7 +750,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                 }
             }
 
-            if (name === 'focus_bricks_update') {
+            if (name === 'focus_update' || name === 'focus_upgrade') {
                 const rawArgs = args as Record<string, unknown> | undefined;
                 const brickName =
                     typeof rawArgs?.['brick'] === 'string' ? rawArgs['brick'] : undefined;
@@ -828,50 +774,7 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                         content: [
                             {
                                 type: 'text' as const,
-                                text: `Bricks update failed: ${err instanceof Error ? err.message : String(err)}`,
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-            }
-
-            if (name === 'focus_self_update') {
-                const rawArgs = args as Record<string, unknown> | undefined;
-                const includeBricks = rawArgs?.['include_bricks'] === true;
-                try {
-                    let installedBricks: string[] | undefined;
-                    if (includeBricks) {
-                        const installer = new NpmInstallerAdapter();
-                        const rawCenter = await installer.readCenterJson();
-                        const centerJson = parseCenterJson(rawCenter);
-                        installedBricks = Object.keys(centerJson.bricks ?? {});
-                    }
-                    const result = cliUpdater({
-                        includeBricks,
-                        ...(installedBricks !== undefined ? { installedBricks } : {}),
-                    });
-                    const parts: string[] = [
-                        `Run the following command to update @focus-mcp/cli:\n  ${result.command}`,
-                        `Detected package manager: ${result.manager}`,
-                    ];
-                    if (result.bricksToUpdate !== undefined) {
-                        if (result.bricksToUpdate.length === 0) {
-                            parts.push('No bricks installed to update.');
-                        } else {
-                            parts.push(
-                                `Bricks to update (${result.bricksToUpdate.length}): ${result.bricksToUpdate.join(', ')}`,
-                                `Run: focus bricks:update --all`,
-                            );
-                        }
-                    }
-                    return { content: [{ type: 'text' as const, text: parts.join('\n') }] };
-                } catch (err) {
-                    return {
-                        content: [
-                            {
-                                type: 'text' as const,
-                                text: `Self-update check failed: ${err instanceof Error ? err.message : String(err)}`,
+                                text: `${name === 'focus_upgrade' ? 'Upgrade' : 'Update'} failed: ${err instanceof Error ? err.message : String(err)}`,
                             },
                         ],
                         isError: true,
@@ -960,150 +863,69 @@ export async function startCommand(argv: string[] = []): Promise<void> {
             } // end focus_catalog_remove
         } // end !isBenchMode
 
-        // focus_tools_* are always handled regardless of bench mode and are immune to the hidden list
-        if (name === 'focus_tools_hide') {
-            const pattern = (args as Record<string, unknown>)?.['pattern'];
-            if (typeof pattern !== 'string' || pattern.trim() === '') {
-                return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid pattern.' }],
-                    isError: true,
-                };
-            }
-            try {
-                return {
-                    content: [
-                        { type: 'text' as const, text: await configToolsHideCommand(pattern) },
-                    ],
-                };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `focus_tools_hide failed: ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-        }
+        // focus_tools is always handled regardless of bench mode and is immune to the hidden list
+        if (name === 'focus_tools') {
+            const rawArgs = args as Record<string, unknown> | undefined;
+            const action = rawArgs?.['action'];
+            const pattern =
+                typeof rawArgs?.['pattern'] === 'string' ? rawArgs['pattern'] : undefined;
 
-        if (name === 'focus_tools_show') {
-            const pattern = (args as Record<string, unknown>)?.['pattern'];
-            if (typeof pattern !== 'string' || pattern.trim() === '') {
+            if (typeof action !== 'string') {
                 return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid pattern.' }],
+                    content: [{ type: 'text' as const, text: 'Missing or invalid action.' }],
                     isError: true,
                 };
             }
-            try {
-                return {
-                    content: [
-                        { type: 'text' as const, text: await configToolsShowCommand(pattern) },
-                    ],
-                };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `focus_tools_show failed: ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-        }
 
-        if (name === 'focus_tools_pin') {
-            const pattern = (args as Record<string, unknown>)?.['pattern'];
-            if (typeof pattern !== 'string' || pattern.trim() === '') {
-                return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid pattern.' }],
-                    isError: true,
-                };
+            // Actions that require a pattern
+            if (action === 'hide' || action === 'show' || action === 'pin' || action === 'unpin') {
+                if (typeof pattern !== 'string' || pattern.trim() === '') {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Missing or invalid pattern for action "${action}".`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
             }
-            try {
-                return {
-                    content: [
-                        { type: 'text' as const, text: await configToolsPinCommand(pattern) },
-                    ],
-                };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `focus_tools_pin failed: ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-        }
 
-        if (name === 'focus_tools_unpin') {
-            const pattern = (args as Record<string, unknown>)?.['pattern'];
-            if (typeof pattern !== 'string' || pattern.trim() === '') {
-                return {
-                    content: [{ type: 'text' as const, text: 'Missing or invalid pattern.' }],
-                    isError: true,
-                };
-            }
+            // At this point, pattern is a validated string for actions that require it
+            const safePattern = pattern ?? '';
             try {
-                return {
-                    content: [
-                        { type: 'text' as const, text: await configToolsUnpinCommand(pattern) },
-                    ],
-                };
+                let text: string;
+                if (action === 'hide') text = await configToolsHideCommand(safePattern);
+                else if (action === 'show') text = await configToolsShowCommand(safePattern);
+                else if (action === 'pin') text = await configToolsPinCommand(safePattern);
+                else if (action === 'unpin') text = await configToolsUnpinCommand(safePattern);
+                else if (action === 'list') text = await configToolsListCommand();
+                else if (action === 'clear') text = await configToolsClearCommand();
+                else {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `Unknown action "${action}". Valid actions: hide, show, pin, unpin, list, clear.`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+                return { content: [{ type: 'text' as const, text }] };
             } catch (err) {
                 return {
                     content: [
                         {
                             type: 'text' as const,
-                            text: `focus_tools_unpin failed: ${err instanceof Error ? err.message : String(err)}`,
+                            text: `focus_tools failed: ${err instanceof Error ? err.message : String(err)}`,
                         },
                     ],
                     isError: true,
                 };
             }
-        }
-
-        if (name === 'focus_tools_list') {
-            try {
-                return {
-                    content: [{ type: 'text' as const, text: await configToolsListCommand() }],
-                };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `focus_tools_list failed: ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-        }
-
-        if (name === 'focus_tools_clear') {
-            try {
-                return {
-                    content: [{ type: 'text' as const, text: await configToolsClearCommand() }],
-                };
-            } catch (err) {
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: `focus_tools_clear failed: ${err instanceof Error ? err.message : String(err)}`,
-                        },
-                    ],
-                    isError: true,
-                };
-            }
-        } // end focus_tools_*
+        } // end focus_tools
 
         // Brick tools (existing dispatch)
         try {
