@@ -489,7 +489,15 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                         result.errors.length > 0
                             ? `${result.output}\n\nWarnings:\n${result.errors.join('\n')}`
                             : result.output;
-                    return { content: [{ type: 'text' as const, text }] };
+                    return {
+                        content: [
+                            { type: 'text' as const, text },
+                            {
+                                type: 'text' as const,
+                                text: JSON.stringify({ bricks: result.bricks }, null, 2),
+                            },
+                        ],
+                    };
                 } catch (err) {
                     return {
                         content: [
