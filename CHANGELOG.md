@@ -1,5 +1,11 @@
 # @focus-mcp/cli
 
+## 2.1.0
+
+### Minor Changes
+
+- 422cb46: feat(cli): update notifier — warns when new cli or brick version is available
+
 ## 2.0.0
 
 ### Major Changes

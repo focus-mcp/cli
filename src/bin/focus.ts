@@ -22,6 +22,8 @@ import { parseCenterJson, parseCenterLock } from '../center.ts';
 import { addManyCommand } from '../commands/add.ts';
 import { browseCommand } from '../commands/browse.ts';
 import { catalogCommand } from '../commands/catalog.ts';
+import { runUpdateCheck } from '../commands/check-updates.ts';
+import { cliUpdater } from '../commands/cli-updater.ts';
 import {
     configToolsClearCommand,
     configToolsHideCommand,
@@ -46,13 +48,13 @@ Usage:
   focus <command> [options]
 
 Commands:
+  update / upgrade             Self-update the CLI to the latest version
+                               --all  also update all installed bricks
   list                         List installed bricks (from ~/.focus/center.json)
   info <name>                  Show details of a single brick
   add [-f] <name> [name2 ...]  Install one or more bricks (deps auto-installed)
-                               -f / --force  re-install even if already present or corrupted
   remove <name> [...]          Uninstall one or more bricks
   reinstall <name> [...]       Force-reinstall (preserves enabled state; use after doctor)
-  upgrade [name] [--all]       Re-install brick(s) at the latest catalog version
   search [query]               Search bricks in the catalog
   catalog [list|add|remove]    Manage catalog sources (subcommand or catalog: namespace below)
     catalog:list               List catalog sources
@@ -64,6 +66,15 @@ Commands:
   start [options]              Launch FocusMCP as a stdio MCP server (AI clients attach here)
                                --hide=<patterns>    comma-separated patterns to hide (e.g. "sym_get,focus_*")
                                --pin=<patterns>     comma-separated patterns to mark as alwaysLoad
+
+  Bricks namespace (bricks:):
+    bricks:install <name>      Install a brick (alias: add)
+    bricks:remove <name>       Remove a brick (alias: remove)
+    bricks:list                List installed bricks (alias: list)
+    bricks:search [query]      Search bricks (alias: search)
+    bricks:update [name] [--all] [--check]  Update one or all installed bricks
+    bricks:load <name>         Load a brick at runtime
+    bricks:unload <name>       Unload a brick at runtime
 
   Tool visibility (tools: namespace):
     tools:hide <pattern>       Hide a tool or glob (alias: filter hide)
@@ -77,8 +88,12 @@ Commands:
   help                         Print this help
 
 Options:
-  -h, --help       Print help
-  -v, --version    Print the CLI version
+  -h, --help             Print help
+  -v, --version          Print the CLI version
+  --no-update-check      Skip update notifications for this invocation
+
+Environment:
+  FOCUS_NO_UPDATE_NOTIFY=1  Permanently disable update notifications
 `;
 
 function printHelp(): void {
@@ -234,7 +249,61 @@ async function runCatalog(rest: string[]): Promise<number> {
     return 0;
 }
 
-async function runUpgrade(rest: string[]): Promise<number> {
+/**
+ * `focus update` / `focus upgrade` — self-update the CLI (2.0.0 new semantics).
+ *
+ * Without args → print the command to run for self-update.
+ * With `--all`  → also update all installed bricks (run bricks:update --all after CLI).
+ * With a brick name → ERROR with guidance to use `bricks:update <name>` instead.
+ */
+async function runSelfUpdate(rest: string[]): Promise<number> {
+    const { values: updateValues, positionals: updatePosArgs } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        strict: false,
+        options: {
+            all: { type: 'boolean' },
+        },
+    });
+
+    // Guard: brick name argument is no longer supported here
+    const brickArg = updatePosArgs[0];
+    if (brickArg !== undefined) {
+        process.stderr.write(
+            `error: \`focus update <brick>\` is no longer supported.\n` +
+                `Use \`focus bricks:update ${brickArg}\` to update a specific brick.\n`,
+        );
+        return 1;
+    }
+
+    const includeAll = updateValues['all'] === true;
+
+    // Compute self-update info (pure — no I/O)
+    const updateInfo = cliUpdater({ includeBricks: includeAll });
+
+    if (updateInfo.manager === 'unknown') {
+        process.stdout.write(
+            `To update @focus-mcp/cli, run:\n  npm install -g @focus-mcp/cli@latest\n\n` +
+                `(Could not detect your package manager. Run the command above or use your package manager's global install.)\n`,
+        );
+    } else {
+        process.stdout.write(`To update @focus-mcp/cli, run:\n  ${updateInfo.command}\n`);
+    }
+
+    if (includeAll) {
+        process.stdout.write(`\nAlso updating all installed bricks…\n`);
+        const exitCode = await runBricksUpdate([]);
+        return exitCode;
+    }
+
+    return 0;
+}
+
+/**
+ * `focus bricks:update [name] [--all] [--check]` — update one or all installed bricks.
+ * This is the former behavior of `focus update/upgrade`.
+ */
+async function runBricksUpdate(rest: string[]): Promise<number> {
     const { values: upgradeValues, positionals: upgradePosArgs } = parseArgs({
         args: rest,
         allowPositionals: true,
@@ -261,6 +330,49 @@ async function runUpgrade(rest: string[]): Promise<number> {
     });
     process.stdout.write(`${result.output}\n`);
     return result.failed > 0 ? 1 : 0;
+}
+
+/**
+ * `focus bricks:load <name>` — dynamically load a brick at runtime via MCP.
+ *
+ * Note: this CLI stub only shows guidance. Actual load/unload at runtime
+ * must go through the MCP tool `focus_bricks_load` (the running server).
+ */
+async function runBricksLoad(rest: string[]): Promise<number> {
+    const name = rest[0];
+    if (!name) {
+        process.stderr.write(
+            'error: `focus bricks:load <name>` requires a brick name.\n' +
+                'Tip: to load a brick in a running MCP session, use the MCP tool `focus_bricks_load`.\n',
+        );
+        return 1;
+    }
+    process.stdout.write(
+        `To load brick "${name}" in a running MCP session, call the MCP tool:\n` +
+            `  focus_bricks_load({ name: "${name}" })\n\n` +
+            `Or restart \`focus start\` after installing the brick.\n`,
+    );
+    return 0;
+}
+
+/**
+ * `focus bricks:unload <name>` — dynamically unload a brick at runtime via MCP.
+ */
+async function runBricksUnload(rest: string[]): Promise<number> {
+    const name = rest[0];
+    if (!name) {
+        process.stderr.write(
+            'error: `focus bricks:unload <name>` requires a brick name.\n' +
+                'Tip: to unload a brick in a running MCP session, use the MCP tool `focus_bricks_unload`.\n',
+        );
+        return 1;
+    }
+    process.stdout.write(
+        `To unload brick "${name}" in a running MCP session, call the MCP tool:\n` +
+            `  focus_bricks_unload({ name: "${name}" })\n\n` +
+            `Or restart \`focus start\` without the brick enabled.\n`,
+    );
+    return 0;
 }
 
 async function runDoctor(rest: string[]): Promise<number> {
@@ -473,6 +585,7 @@ async function main(argv: string[]): Promise<number> {
         options: {
             help: { type: 'boolean', short: 'h' },
             version: { type: 'boolean', short: 'v' },
+            'no-update-check': { type: 'boolean' },
         },
     });
 
@@ -486,6 +599,10 @@ async function main(argv: string[]): Promise<number> {
     const [command] = positionals;
     const commandIndex = argv.indexOf(command ?? '');
     const rest = commandIndex >= 0 ? argv.slice(commandIndex + 1) : [];
+
+    // Fire-and-forget update check (non-blocking, skip for help/version/update)
+    const cliVersion = process.env['CLI_VERSION'] ?? '0.0.0';
+    runUpdateCheck(command !== undefined ? [command, ...rest] : [], cliVersion);
 
     if (!command || command === 'help' || values['help']) {
         printHelp();
@@ -503,9 +620,10 @@ async function main(argv: string[]): Promise<number> {
             return runRemove(rest);
         case 'reinstall':
             return runReinstall(rest);
+        // update / upgrade now self-update the CLI (breaking change in 2.0.0)
         case 'upgrade':
         case 'update':
-            return runUpgrade(rest);
+            return runSelfUpdate(rest);
         case 'search':
             return runSearch(rest);
         case 'catalog':
@@ -521,6 +639,21 @@ async function main(argv: string[]): Promise<number> {
             return runDoctor(rest);
         case 'config':
             return runConfig(rest);
+        // bricks: namespace — manage bricks (canonical in 2.0.0)
+        case 'bricks:install':
+            return runAdd(rest);
+        case 'bricks:remove':
+            return runRemove(rest);
+        case 'bricks:list':
+            return runList();
+        case 'bricks:search':
+            return runSearch(rest);
+        case 'bricks:update':
+            return runBricksUpdate(rest);
+        case 'bricks:load':
+            return runBricksLoad(rest);
+        case 'bricks:unload':
+            return runBricksUnload(rest);
         // tools: namespace — canonical Symfony-style commands
         case 'tools:hide':
             return runTools(['hide', ...rest]);
