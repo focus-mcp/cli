@@ -1,5 +1,50 @@
 # @focus-mcp/cli
 
+## 2.0.0
+
+### Major Changes
+
+**BREAKING CHANGES — Migration required for existing users.**
+
+#### MCP tools renamed to `focus_<namespace>_<action>` pattern
+
+| Before (1.9.0) | After (2.0.0) |
+|---|---|
+| `focus_install` | `focus_bricks_install` |
+| `focus_remove` | `focus_bricks_remove` |
+| `focus_search` | `focus_bricks_search` |
+| `focus_load` | `focus_bricks_load` |
+| `focus_unload` | `focus_bricks_unload` |
+| `focus_reload` | `focus_bricks_reload` |
+| `focus_update` | `focus_bricks_update` |
+| `focus_upgrade` | removed (use `focus_bricks_update`) |
+| `focus_tools` (singleton with `action` arg) | split into 6 distinct tools |
+| *(new)* | `focus_self_update` |
+
+The 6 new tools replacing `focus_tools`: `focus_tools_hide`, `focus_tools_show`, `focus_tools_pin`, `focus_tools_unpin`, `focus_tools_list`, `focus_tools_clear`.
+
+`focus_catalog_add`, `focus_catalog_list`, `focus_catalog_remove` are unchanged.
+
+#### `focus update` / `focus upgrade` now self-update the CLI
+
+- `focus update` / `focus upgrade` → self-update the CLI
+- `focus update --all` → self-update CLI + all installed bricks
+- `focus update <name>` → **ERROR** (use `focus bricks:update <name>`)
+- `focus bricks:update [name] [--all] [--check]` → update brick(s)
+
+#### New `bricks:` namespace
+
+`focus bricks:install`, `focus bricks:remove`, `focus bricks:list`,
+`focus bricks:search`, `focus bricks:update`, `focus bricks:load`, `focus bricks:unload`.
+
+Flat aliases (`add`, `remove`, `list`, `search`) remain as permanent back-compat.
+
+#### Migration
+
+- Update MCP tool names in AI client configs (`focus_install` → `focus_bricks_install`, etc.)
+- Replace `focus_tools { action: "hide", pattern: "..." }` with `focus_tools_hide { pattern: "..." }`
+- Replace `focus update <brick>` with `focus bricks:update <brick>`
+
 ## 1.9.0
 
 ### Minor Changes
