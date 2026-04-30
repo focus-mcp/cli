@@ -39,9 +39,6 @@ jobs:
           if [ "$PENDING" -eq 0 ]; then
             echo "No pending changesets — skipping dev publish."
           fi
-      - name: Upgrade npm for OIDC Trusted Publishing support
-        if: steps.pending.outputs.count != '0'
-        run: npm install -g npm@latest
       - name: Apply changeset snapshot version
         if: steps.pending.outputs.count != '0'
         run: pnpm changeset version --snapshot dev
