@@ -67,6 +67,7 @@
         "changeset": "changeset",
         "version": "changeset version",
         "release": "changeset publish",
+        "preflight": "bash scripts/preflight-release.sh",
         "prepare": "husky"
     },
     "dependencies": {
