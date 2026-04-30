@@ -32,8 +32,6 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: '@focus-mcp'
       - run: pnpm build
-      - name: Upgrade npm for OIDC Trusted Publishing support
-        run: npm install -g npm@latest
       - name: Publish with latest tag
         id: publish
         run: |
