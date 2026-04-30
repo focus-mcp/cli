@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: 2026 FocusMCP contributors
+# SPDX-License-Identifier: MIT
+
+name: Check Changeset
+
+on:
+  pull_request:
+    branches: [develop]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  check-changeset:
+    name: Check Changeset Present
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Verify changeset present (or skip-changeset label)
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HAS_SKIP_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'skip-changeset') }}
+        run: |
+          if [[ "$HAS_SKIP_LABEL" == "true" ]]; then
+            echo "✓ PR has 'skip-changeset' label, accepting without changeset."
+            exit 0
+          fi
+
+          git fetch origin "$BASE_REF" --depth=50
+          NEW_CHANGESETS=$(git diff --name-only --diff-filter=A "origin/$BASE_REF" HEAD -- '.changeset/*.md' | grep -v 'README\.md' || true)
+
+          if [ -z "$NEW_CHANGESETS" ]; then
+            echo "::error::No new changeset found in this PR."
+            echo "Run 'pnpm changeset' to add one, or apply the 'skip-changeset' label if changes don't require a release."
+            exit 1
+          fi
+
+          echo "✓ Changesets found:"
+          echo "$NEW_CHANGESETS"
