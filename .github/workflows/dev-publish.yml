@@ -48,5 +48,6 @@ jobs:
       - name: Publish with dev tag
         if: steps.pending.outputs.count != '0'
         run: pnpm changeset publish --no-git-tag --tag dev
+        # NODE_AUTH_TOKEN fallback: kept for rollback if Trusted Publisher not yet configured on npmjs.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

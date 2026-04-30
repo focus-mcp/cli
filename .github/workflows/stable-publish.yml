@@ -42,6 +42,7 @@ jobs:
           else
             echo "published=true" >> "$GITHUB_OUTPUT"
           fi
+        # NODE_AUTH_TOKEN fallback: kept for rollback if Trusted Publisher not yet configured on npmjs.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
