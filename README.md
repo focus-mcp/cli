@@ -238,3 +238,5 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full guidelines.
 ## License
 
 [MIT](./LICENSE)
+
+<!-- smoke test check-changeset workflow -->
