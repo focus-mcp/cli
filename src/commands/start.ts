@@ -62,6 +62,33 @@ export const minimalLogger = {
     error() {},
 };
 
+/**
+ * Pure helper: checks whether `installedVersion` is compatible with
+ * `^requiredMajor.requiredMinor.0` (semver caret rule).
+ *
+ * Returns `{ compatible: true }` when the installed version satisfies the range,
+ * or `{ compatible: false, message: string }` with a human-readable warning otherwise.
+ */
+export function checkCoreVersionCompat(
+    installedVersion: string,
+    requiredMajor: number,
+    requiredMinor: number,
+): { compatible: true } | { compatible: false; message: string } {
+    const parts = installedVersion.replace(/[^0-9.]/g, '').split('.');
+    const vMajor = parseInt(parts[0] ?? '0', 10);
+    const vMinor = parseInt(parts[1] ?? '0', 10);
+    if (vMajor === requiredMajor && vMinor >= requiredMinor) {
+        return { compatible: true };
+    }
+    return {
+        compatible: false,
+        message:
+            `[focus-mcp] WARNING: @focus-mcp/core ${installedVersion} may be incompatible.\n` +
+            `Required: ^${requiredMajor}.${requiredMinor}.0\n` +
+            `Run: npm install -g @focus-mcp/core@latest to update.\n`,
+    };
+}
+
 async function loadSingleBrick(brickName: string, bricksDir: string): Promise<Brick> {
     const source = new FilesystemBrickSource({
         centerJson: { bricks: { [brickName]: { version: '*', enabled: true } } },
@@ -125,15 +152,13 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                     version: string;
                 };
                 if (d.name === '@focus-mcp/core') {
-                    const parts = d.version.replace(/[^0-9.]/g, '').split('.');
-                    const vMajor = parseInt(parts[0] ?? '0', 10);
-                    const vMinor = parseInt(parts[1] ?? '0', 10);
-                    if (!(vMajor === REQUIRED_CORE_MAJOR && vMinor >= REQUIRED_CORE_MINOR)) {
-                        process.stderr.write(
-                            `[focus-mcp] WARNING: @focus-mcp/core ${d.version} may be incompatible.\n` +
-                                `Required: ^${REQUIRED_CORE_MAJOR}.${REQUIRED_CORE_MINOR}.0\n` +
-                                `Run: npm install -g @focus-mcp/core@latest to update.\n`,
-                        );
+                    const result = checkCoreVersionCompat(
+                        d.version,
+                        REQUIRED_CORE_MAJOR,
+                        REQUIRED_CORE_MINOR,
+                    );
+                    if (!result.compatible) {
+                        process.stderr.write(result.message);
                     }
                     break;
                 }

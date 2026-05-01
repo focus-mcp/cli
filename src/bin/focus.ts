@@ -18,6 +18,7 @@
 // This check catches the case where the wrong version is installed —
 // core loads fine but the runtime ABI may be incompatible.
 import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 {
@@ -41,16 +42,16 @@ import { fileURLToPath } from 'node:url';
         const coreEntryUrl = import.meta.resolve('@focus-mcp/core');
         // coreEntryUrl: file:///path/to/node_modules/@focus-mcp/core/dist/index.js
         // Go up from dist/ to the package root.
+        // Use path.dirname / path.join for cross-platform support (Windows uses \\ separators).
         const coreEntryPath = fileURLToPath(coreEntryUrl);
-        // Walk up until we find a package.json with name @focus-mcp/core
         let dir = coreEntryPath;
         let corePkgPath: string | null = null;
         for (let i = 0; i < 4; i++) {
-            const parent = dir.includes('/') ? dir.substring(0, dir.lastIndexOf('/')) : dir;
+            const parent = dirname(dir);
             if (parent === dir) break;
             dir = parent;
             try {
-                const candidate = `${dir}/package.json`;
+                const candidate = join(dir, 'package.json');
                 const candidate_content = JSON.parse(readFileSync(candidate, 'utf-8')) as {
                     name?: string;
                     version: string;

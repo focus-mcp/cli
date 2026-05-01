@@ -2894,3 +2894,45 @@ describe('startCommand', () => {
         });
     });
 });
+
+// ---------------------------------------------------------------------------
+// checkCoreVersionCompat — pure unit tests (no I/O, no mocks needed)
+// ---------------------------------------------------------------------------
+import { checkCoreVersionCompat } from './start.ts';
+
+describe('checkCoreVersionCompat', () => {
+    it('returns compatible: true when installed version satisfies the required range', () => {
+        // Exact match
+        expect(checkCoreVersionCompat('1.5.0', 1, 5)).toEqual({ compatible: true });
+        // Same major, higher minor
+        expect(checkCoreVersionCompat('1.6.0', 1, 5)).toEqual({ compatible: true });
+        // Same major, same minor, higher patch
+        expect(checkCoreVersionCompat('1.5.3', 1, 5)).toEqual({ compatible: true });
+        // Pre-release tag stripped — numeric parts match
+        expect(checkCoreVersionCompat('1.5.0-beta.1', 1, 5)).toEqual({ compatible: true });
+    });
+
+    it('returns compatible: false with a warning message when version is incompatible', () => {
+        // Major mismatch (too high)
+        const result1 = checkCoreVersionCompat('2.0.0', 1, 5);
+        expect(result1.compatible).toBe(false);
+        if (!result1.compatible) {
+            expect(result1.message).toContain('WARNING');
+            expect(result1.message).toContain('2.0.0');
+            expect(result1.message).toContain('^1.5.0');
+            expect(result1.message).toContain('npm install -g @focus-mcp/core@latest');
+        }
+
+        // Minor too low (same major)
+        const result2 = checkCoreVersionCompat('1.4.9', 1, 5);
+        expect(result2.compatible).toBe(false);
+        if (!result2.compatible) {
+            expect(result2.message).toContain('WARNING');
+            expect(result2.message).toContain('1.4.9');
+        }
+
+        // Major too low
+        const result3 = checkCoreVersionCompat('0.9.0', 1, 5);
+        expect(result3.compatible).toBe(false);
+    });
+});
