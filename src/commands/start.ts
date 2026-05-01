@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2026 FocusMCP contributors
 // SPDX-License-Identifier: MIT
 
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import type { Brick } from '@focus-mcp/core';
 import { createFocusMcp, loadBricks } from '@focus-mcp/core';
@@ -60,6 +62,33 @@ export const minimalLogger = {
     error() {},
 };
 
+/**
+ * Pure helper: checks whether `installedVersion` is compatible with
+ * `^requiredMajor.requiredMinor.0` (semver caret rule).
+ *
+ * Returns `{ compatible: true }` when the installed version satisfies the range,
+ * or `{ compatible: false, message: string }` with a human-readable warning otherwise.
+ */
+export function checkCoreVersionCompat(
+    installedVersion: string,
+    requiredMajor: number,
+    requiredMinor: number,
+): { compatible: true } | { compatible: false; message: string } {
+    const parts = installedVersion.replace(/[^0-9.]/g, '').split('.');
+    const vMajor = parseInt(parts[0] ?? '0', 10);
+    const vMinor = parseInt(parts[1] ?? '0', 10);
+    if (vMajor === requiredMajor && vMinor >= requiredMinor) {
+        return { compatible: true };
+    }
+    return {
+        compatible: false,
+        message:
+            `[focus-mcp] WARNING: @focus-mcp/core ${installedVersion} may be incompatible.\n` +
+            `Required: ^${requiredMajor}.${requiredMinor}.0\n` +
+            `Run: npm install -g @focus-mcp/core@latest to update.\n`,
+    };
+}
+
 async function loadSingleBrick(brickName: string, bricksDir: string): Promise<Brick> {
     const source = new FilesystemBrickSource({
         centerJson: { bricks: { [brickName]: { version: '*', enabled: true } } },
@@ -105,6 +134,42 @@ export function isHiddenTool(toolName: string, hiddenPatterns: string[] | null):
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: startup wiring with multiple mode branches
 export async function startCommand(argv: string[] = []): Promise<void> {
+    // Non-fatal version compatibility warning — keeps the MCP server alive even
+    // if core is slightly out of range, but informs the operator on stderr.
+    try {
+        const REQUIRED_CORE_MAJOR = 1;
+        const REQUIRED_CORE_MINOR = 5;
+        const coreEntryUrl = import.meta.resolve('@focus-mcp/core');
+        let dir = fileURLToPath(coreEntryUrl);
+        for (let i = 0; i < 4; i++) {
+            const parent = dir.includes('/') ? dir.substring(0, dir.lastIndexOf('/')) : dir;
+            if (parent === dir) break;
+            dir = parent;
+            try {
+                const candidate = `${dir}/package.json`;
+                const d = JSON.parse(readFileSync(candidate, 'utf-8')) as {
+                    name?: string;
+                    version: string;
+                };
+                if (d.name === '@focus-mcp/core') {
+                    const result = checkCoreVersionCompat(
+                        d.version,
+                        REQUIRED_CORE_MAJOR,
+                        REQUIRED_CORE_MINOR,
+                    );
+                    if (!result.compatible) {
+                        process.stderr.write(result.message);
+                    }
+                    break;
+                }
+            } catch {
+                // keep walking up
+            }
+        }
+    } catch {
+        // import.meta.resolve unavailable or core not found — skip non-fatal check
+    }
+
     const { values } = parseArgs({
         args: argv,
         allowPositionals: false,

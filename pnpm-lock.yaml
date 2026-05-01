@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@focus-mcp/core':
+        specifier: ^1.5.0
+        version: 1.5.0
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.29.0(zod@4.3.6)
@@ -33,9 +36,6 @@ importers:
       '@commitlint/types':
         specifier: ^19.8.1
         version: 19.8.1
-      '@focus-mcp/core':
-        specifier: ^1.5.0
-        version: 1.5.0
       '@types/node':
         specifier: ^22.10.0
         version: 22.19.17
