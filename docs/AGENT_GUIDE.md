@@ -11,10 +11,10 @@ You are an AI agent with access to FocusMCP via MCP. FocusMCP is a marketplace o
 
 ```
 1. Detect the project stack (read package.json / pyproject.toml / go.mod / etc.)
-2. focus_bricks_search "<framework>" — find relevant bricks
-3. focus_bricks_install <brick>      — install the useful ones
-4. focus_tools_pin <tool>            — surface frequently-used tools to top
-5. focus_check_updates               — stay current
+2. focus_bricks_search query="<framework>"  — find relevant bricks
+3. focus_bricks_install name="<brick>"      — install the useful ones
+4. focus_tools_pin pattern="<tool>"         — surface frequently-used tools to top
+5. focus_check_updates                      — stay current
 ```
 
 ---
@@ -60,7 +60,7 @@ focus_bricks_install name="shell"
 focus_bricks_install name="filesystem"
 ```
 
-Each install is instant — no build step. Bricks are npm packages loaded on demand.
+Each brick installs to `~/.focus/bricks/` via npm — fast on warm npm cache, but requires network access on first install. No additional local build step is required.
 
 ### Step 4 — Verify what is loaded
 
@@ -68,7 +68,7 @@ Each install is instant — no build step. Bricks are npm packages loaded on dem
 focus_bricks_list
 ```
 
-Returns the list of installed bricks and their load status.
+Returns the list of bricks currently **loaded** in the running MCP server and their status/tools. It does not list bricks installed on disk but not yet loaded. To list all installed bricks, use the terminal command `focus list`.
 
 ### Step 5 — Load bricks into the active session
 
@@ -79,11 +79,13 @@ focus_bricks_load name="codebase"
 focus_bricks_load name="shell"
 ```
 
-Or reload all installed bricks at once:
+To reload a single loaded brick (stop, reimport from disk, restart):
 
 ```
-focus_bricks_reload
+focus_bricks_reload name="codebase"
 ```
+
+Note: `focus_bricks_reload` requires a `name=` argument and operates on one brick at a time. To reload multiple bricks, call it once per brick.
 
 ### Step 6 — Pin the tools you use most
 
@@ -93,7 +95,7 @@ focus_tools_pin pattern="ts_index"
 focus_tools_list
 ```
 
-Pinned tools appear as `alwaysLoad: true` in MCP responses — some clients surface them higher in the menu.
+Pinned tools are surfaced via the MCP tool descriptor `_meta` field as `_meta["anthropic/alwaysLoad"]: true` — MCP clients that support this hint (e.g. Claude Code) keep these tools always loaded.
 
 ---
 
@@ -295,9 +297,10 @@ focus_catalog_remove url="https://example.com/my-catalog.json"
 ## Updates
 
 ```
-focus_check_updates     # show which bricks and CLI have updates
-focus_bricks_update name="codebase"   # update a specific brick
-focus_self_update       # update the CLI itself
+focus_check_updates              # show which bricks and CLI have updates
+focus_bricks_update brick="codebase"   # update a specific brick
+focus_bricks_update              # update all installed bricks (omit brick= to update all)
+focus_self_update                # update the CLI itself
 ```
 
 ---
@@ -323,7 +326,7 @@ focus info <name>       # details for a brick
 ```
 # From MCP (within your AI client session):
 focus_check_updates     # bricks + CLI update status
-focus_bricks_list       # installed bricks + load state
+focus_bricks_list       # loaded bricks + status/tools (use `focus list` in terminal for installed)
 focus_bricks_search query="<topic>"   # search catalog
 ```
 
