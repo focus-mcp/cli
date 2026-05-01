@@ -209,6 +209,10 @@ AI client (Claude Code, Cursor, Codex, …)
 
 **Why not give the agent all tools at once?** Because a 200k-token context window filled with hundreds of tool descriptions leaves very little room for actual work. FocusMCP keeps the agent's context lean — ~2k tokens for the orchestrator itself — and loads domain-specific tools only when needed.
 
+## For AI agents
+
+If you are an AI agent (Claude Code, Cursor, Cline, Codex, etc.) and want to bootstrap on a new project using FocusMCP, read the **[Agent Bootstrap Guide](./docs/AGENT_GUIDE.md)**. It covers stack detection, brick search and install, tool pinning, and common workflows — optimized for LLM consumption.
+
 ## Links
 
 - **Marketplace**: <https://github.com/focus-mcp/marketplace>
