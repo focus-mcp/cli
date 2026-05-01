@@ -13,6 +13,76 @@
  * `biome.json` allows `console.*` under `src/bin/` and `src/commands/`.
  */
 
+// ---------- Boot version check ----------
+// Note: ESM imports are hoisted and resolved before this code runs.
+// This check catches the case where the wrong version is installed —
+// core loads fine but the runtime ABI may be incompatible.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+{
+    const REQUIRED_CORE_MAJOR = 1;
+    const REQUIRED_CORE_MINOR = 5;
+
+    /**
+     * Checks whether `version` satisfies `^MAJOR.MINOR.0` (semver caret range).
+     * Caret rule: same major, minor >= required minor.
+     */
+    function satisfiesCaret(version: string, major: number, minor: number): boolean {
+        const parts = version.replace(/[^0-9.]/g, '').split('.');
+        const vMajor = parseInt(parts[0] ?? '0', 10);
+        const vMinor = parseInt(parts[1] ?? '0', 10);
+        return vMajor === major && vMinor >= minor;
+    }
+
+    try {
+        // Resolve @focus-mcp/core entry point, then navigate to its package root.
+        // import.meta.resolve is available in Node.js >=22 without the --experimental flag.
+        const coreEntryUrl = import.meta.resolve('@focus-mcp/core');
+        // coreEntryUrl: file:///path/to/node_modules/@focus-mcp/core/dist/index.js
+        // Go up from dist/ to the package root.
+        const coreEntryPath = fileURLToPath(coreEntryUrl);
+        // Walk up until we find a package.json with name @focus-mcp/core
+        let dir = coreEntryPath;
+        let corePkgPath: string | null = null;
+        for (let i = 0; i < 4; i++) {
+            const parent = dir.includes('/') ? dir.substring(0, dir.lastIndexOf('/')) : dir;
+            if (parent === dir) break;
+            dir = parent;
+            try {
+                const candidate = `${dir}/package.json`;
+                const candidate_content = JSON.parse(readFileSync(candidate, 'utf-8')) as {
+                    name?: string;
+                    version: string;
+                };
+                if (candidate_content.name === '@focus-mcp/core') {
+                    corePkgPath = candidate;
+                    const installedVersion = candidate_content.version;
+                    if (
+                        !satisfiesCaret(installedVersion, REQUIRED_CORE_MAJOR, REQUIRED_CORE_MINOR)
+                    ) {
+                        process.stderr.write(
+                            `Incompatible @focus-mcp/core version detected.\n` +
+                                `Installed: ${installedVersion}\n` +
+                                `Required:  ^${REQUIRED_CORE_MAJOR}.${REQUIRED_CORE_MINOR}.0\n\n` +
+                                `Run: npm install -g @focus-mcp/core@latest\n`,
+                        );
+                        process.exit(1);
+                    }
+                    break;
+                }
+            } catch {
+                // keep walking up
+            }
+        }
+        void corePkgPath; // suppress unused variable warning
+    } catch {
+        // import.meta.resolve or fileURLToPath failed — skip the check.
+    }
+}
+
+// ---------- End boot version check ----------
+
 import { rm } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import { FilesystemCatalogStoreAdapter } from '../adapters/catalog-store-adapter.ts';

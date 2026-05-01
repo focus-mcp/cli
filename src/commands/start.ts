@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2026 FocusMCP contributors
 // SPDX-License-Identifier: MIT
 
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import type { Brick } from '@focus-mcp/core';
 import { createFocusMcp, loadBricks } from '@focus-mcp/core';
@@ -105,6 +107,44 @@ export function isHiddenTool(toolName: string, hiddenPatterns: string[] | null):
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: startup wiring with multiple mode branches
 export async function startCommand(argv: string[] = []): Promise<void> {
+    // Non-fatal version compatibility warning — keeps the MCP server alive even
+    // if core is slightly out of range, but informs the operator on stderr.
+    try {
+        const REQUIRED_CORE_MAJOR = 1;
+        const REQUIRED_CORE_MINOR = 5;
+        const coreEntryUrl = import.meta.resolve('@focus-mcp/core');
+        let dir = fileURLToPath(coreEntryUrl);
+        for (let i = 0; i < 4; i++) {
+            const parent = dir.includes('/') ? dir.substring(0, dir.lastIndexOf('/')) : dir;
+            if (parent === dir) break;
+            dir = parent;
+            try {
+                const candidate = `${dir}/package.json`;
+                const d = JSON.parse(readFileSync(candidate, 'utf-8')) as {
+                    name?: string;
+                    version: string;
+                };
+                if (d.name === '@focus-mcp/core') {
+                    const parts = d.version.replace(/[^0-9.]/g, '').split('.');
+                    const vMajor = parseInt(parts[0] ?? '0', 10);
+                    const vMinor = parseInt(parts[1] ?? '0', 10);
+                    if (!(vMajor === REQUIRED_CORE_MAJOR && vMinor >= REQUIRED_CORE_MINOR)) {
+                        process.stderr.write(
+                            `[focus-mcp] WARNING: @focus-mcp/core ${d.version} may be incompatible.\n` +
+                                `Required: ^${REQUIRED_CORE_MAJOR}.${REQUIRED_CORE_MINOR}.0\n` +
+                                `Run: npm install -g @focus-mcp/core@latest to update.\n`,
+                        );
+                    }
+                    break;
+                }
+            } catch {
+                // keep walking up
+            }
+        }
+    } catch {
+        // import.meta.resolve unavailable or core not found — skip non-fatal check
+    }
+
     const { values } = parseArgs({
         args: argv,
         allowPositionals: false,

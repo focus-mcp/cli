@@ -21,10 +21,11 @@ export default defineConfig({
         options.jsx = 'automatic';
         options.jsxImportSource = 'react';
     },
-    // @focus-mcp/core is consumed locally via a file: dep at build time.
-    // We bundle it into dist so the published tarball is self-contained
-    // and end users don't have to install @focus-mcp/core themselves.
-    noExternal: ['@focus-mcp/core'],
+    // @focus-mcp/core (and MCP SDK) are runtime npm dependencies — do NOT bundle
+    // them into the cli dist. They will be resolved from node_modules at runtime.
+    // This allows consumers to update @focus-mcp/core independently without
+    // re-releasing @focus-mcp/cli.
+    external: ['@focus-mcp/core'],
     // Only the programmatic API emits .d.ts; the binary doesn't need types.
     dts: {
         entry: { index: 'src/index.ts' },
