@@ -1,5 +1,11 @@
 # @focus-mcp/cli
 
+## 2.2.1
+
+### Patch Changes
+
+- e5cb4d9: chore(release): bump cli after stable-publish dist-tag fix + ensure @latest sync after release
+
 ## 2.2.0
 
 ### Minor Changes
@@ -97,7 +103,6 @@ Flat aliases (`add`, `remove`, `list`, `search`) remain as permanent back-compat
   Old flat names (`filter hide`, `filter list`, etc.) remain as permanent aliases — no deprecation, no breaking change.
 
   MCP tool rename: `focus_config` → `focus_tools` (actions: `hide`, `show`, `pin`, `unpin`, `list`, `clear`). `focus_tools` is immune to hidden lists.
-
 
 ## 1.8.1
 
