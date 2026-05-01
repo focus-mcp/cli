@@ -12,6 +12,7 @@
 
   This unblocks future consumers of @focus-mcp/core (Tauri client, web dashboard, IDE plugins, bricks) that depend on core directly without going through the cli bundle.
 
+
 ## 2.2.1
 
 ### Patch Changes
