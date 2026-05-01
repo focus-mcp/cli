@@ -46,6 +46,16 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Ensure @latest dist-tag
+        if: steps.publish.outputs.published == 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          NAME=$(node -p "require('./package.json').name")
+          echo "Setting @latest tag for ${NAME}@${VERSION}..."
+          npm dist-tag add "${NAME}@${VERSION}" latest || echo "  → dist-tag update skipped"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Create git tag
         if: steps.publish.outputs.published == 'true'
         run: |
