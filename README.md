@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT
 
 # @focus-mcp/cli
 
-> Focus your AI agents on what matters. **Measured savings: 65.9% on output tokens** across 29 bricks ([details](https://github.com/focus-mcp/marketplace/blob/main/benchmarks/equivalence-report.md)).
+> Focus your AI agents on what matters. **Measured savings: 65.9% on output tokens** across 29 benchmarked bricks (out of 68+ total) ([details](https://github.com/focus-mcp/marketplace/blob/main/benchmarks/equivalence-report.md)).
 
 [![npm](https://img.shields.io/npm/v/@focus-mcp/cli)](https://www.npmjs.com/package/@focus-mcp/cli)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
