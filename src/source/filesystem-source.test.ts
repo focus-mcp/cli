@@ -299,4 +299,74 @@ describe('FilesystemBrickSource', () => {
 
         await expect(source.loadModule('evil')).rejects.toThrow(/escapes bricksDir/);
     });
+
+    // ---------- assertWithinBricksDir cross-platform ----------
+
+    it('readManifest() accepts a path inside bricksDir on POSIX', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        const manifest = { name: 'brick-x', version: '1.0.0', tools: [] };
+        mockResolve.mockReturnValue('/fake/bricks/node_modules/@focus-mcp/brick-x/mcp-brick.json');
+        mockRealpathSync.mockReturnValue('/fake/bricks');
+        mockReadFile.mockResolvedValue(JSON.stringify(manifest));
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        const result = await source.readManifest('x');
+        expect(result).toEqual(manifest);
+    });
+
+    it('readManifest() rejects sibling-prefix escape (bricksx outside bricks)', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        // Subtle case: path /fake/bricksx/foo starts with /fake/bricks
+        // but is NOT inside /fake/bricks. The old startsWith logic would
+        // reject correctly thanks to the trailing `/`, but mixing separators
+        // on Windows broke the guarantee. path.relative() handles it.
+        mockResolve.mockReturnValue('/fake/bricksx/foo/mcp-brick.json');
+        mockRealpathSync.mockReturnValue('/fake/bricks');
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        await expect(source.readManifest('foo')).rejects.toThrow(/escapes bricksDir/);
+    });
+
+    it('readManifest() rejects parent-directory escape', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        mockResolve.mockReturnValue('/fake/other/manifest.json');
+        mockRealpathSync.mockReturnValue('/fake/bricks');
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        await expect(source.readManifest('escape')).rejects.toThrow(/escapes bricksDir/);
+    });
+
+    it('readManifest() accepts exact-match path (resolvedPath === bricksDir)', async () => {
+        const { FilesystemBrickSource } = await import('./filesystem-source.ts');
+
+        const manifest = { name: 'brick-x', version: '1.0.0', tools: [] };
+        // Edge case: resolvedPath equals bricksDir exactly. relative() returns ''
+        // which must be allowed (no throw).
+        mockResolve.mockReturnValue('/fake/bricks');
+        mockRealpathSync.mockReturnValue('/fake/bricks');
+        mockReadFile.mockResolvedValue(JSON.stringify(manifest));
+
+        const source = new FilesystemBrickSource({
+            centerJson: { bricks: {} },
+            bricksDir: '/fake/bricks',
+        });
+
+        const result = await source.readManifest('x');
+        expect(result).toEqual(manifest);
+    });
 });

@@ -59,7 +59,10 @@ function runNpm(args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
         const child = spawn('npm', args, {
             stdio: ['ignore', 'pipe', 'pipe'],
-            shell: false,
+            // On Windows, `npm` resolves to `npm.cmd` (a batch script) which
+            // requires a shell to execute. On POSIX `npm` is a direct binary,
+            // so we keep `shell: false` to avoid shell-spawn overhead.
+            shell: process.platform === 'win32',
         });
         let stderr = '';
         child.stderr?.on('data', (chunk: Buffer) => {

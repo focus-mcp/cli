@@ -267,4 +267,56 @@ describe('NpmInstallerAdapter', () => {
             );
         });
     });
+
+    describe('runNpm cross-platform shell behaviour', () => {
+        it('uses shell: true on Windows (resolves npm.cmd batch script)', async () => {
+            const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+            vi.mocked(mkdir).mockResolvedValue(undefined);
+            vi.mocked(spawn).mockReturnValue(
+                makeChildProcess(0) as unknown as ReturnType<typeof spawn>,
+            );
+
+            await adapter.npmInstall('@focus-mcp/brick-echo', '1.0.0');
+
+            expect(spawn).toHaveBeenCalledWith(
+                'npm',
+                expect.any(Array),
+                expect.objectContaining({ shell: true }),
+            );
+            platformSpy.mockRestore();
+        });
+
+        it('uses shell: false on Linux (direct binary, no shell overhead)', async () => {
+            const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+            vi.mocked(mkdir).mockResolvedValue(undefined);
+            vi.mocked(spawn).mockReturnValue(
+                makeChildProcess(0) as unknown as ReturnType<typeof spawn>,
+            );
+
+            await adapter.npmInstall('@focus-mcp/brick-echo', '1.0.0');
+
+            expect(spawn).toHaveBeenCalledWith(
+                'npm',
+                expect.any(Array),
+                expect.objectContaining({ shell: false }),
+            );
+            platformSpy.mockRestore();
+        });
+
+        it('uses shell: false on macOS (direct binary, no shell overhead)', async () => {
+            const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+            vi.mocked(spawn).mockReturnValue(
+                makeChildProcess(0) as unknown as ReturnType<typeof spawn>,
+            );
+
+            await adapter.npmUninstall('@focus-mcp/brick-echo');
+
+            expect(spawn).toHaveBeenCalledWith(
+                'npm',
+                expect.any(Array),
+                expect.objectContaining({ shell: false }),
+            );
+            platformSpy.mockRestore();
+        });
+    });
 });

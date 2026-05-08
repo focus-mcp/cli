@@ -4,7 +4,7 @@
 import { realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { BrickSource } from '@focus-mcp/core';
 import type { CenterJson } from '../center.ts';
@@ -34,7 +34,13 @@ function assertWithinBricksDir(resolvedPath: string, bricksDir: string): void {
     } catch {
         realBricksDir = bricksDir;
     }
-    if (!resolvedPath.startsWith(`${realBricksDir}/`) && resolvedPath !== realBricksDir) {
+    // Use path.relative() instead of string startsWith: it normalizes
+    // separators (handles Windows `\` vs POSIX `/`) and reliably detects
+    // sibling-prefix escapes (e.g. /foo/barx vs /foo/bar). An empty result
+    // means the path equals bricksDir itself (allowed). An absolute or
+    // ../-prefixed result means escape.
+    const rel = relative(realBricksDir, resolvedPath);
+    if (rel !== '' && (rel.startsWith('..') || isAbsolute(rel))) {
         throw new Error(`Resolved path "${resolvedPath}" escapes bricksDir "${realBricksDir}"`);
     }
 }
