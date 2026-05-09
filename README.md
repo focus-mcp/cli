@@ -72,6 +72,111 @@ focus list            # Show all installed bricks
 focus info echo       # Show details for a specific brick
 ```
 
+## Windows
+
+FocusMCP supports Windows as of `@focus-mcp/cli >= 2.3.1`. Earlier versions may fail when installing or loading bricks because of Windows `.cmd` wrappers and path separator handling.
+
+### Requirements
+
+- Windows 10/11
+- Node.js >= 22
+- npm available from PowerShell or Command Prompt
+- `@focus-mcp/cli >= 2.3.1`
+
+### Install
+
+```powershell
+npm install -g @focus-mcp/cli@latest
+focus --version
+```
+
+Expected:
+
+```
+@focus-mcp/cli 2.3.1 or newer
+```
+
+### Test
+
+```powershell
+focus search cache
+focus add cache
+focus list
+```
+
+### MCP client config on Windows
+
+For Windows MCP clients, prefer launching through `cmd.exe` and the `.cmd` shim, especially when using nvm4w or when the client does not inherit your interactive shell PATH.
+
+Generic MCP JSON:
+
+```json
+{
+    "mcpServers": {
+        "focus": {
+            "command": "C:\\\\Windows\\\\System32\\\\cmd.exe",
+            "args": ["/d", "/c", "focus.cmd", "start"]
+        }
+    }
+}
+```
+
+If your MCP client cannot find `focus.cmd`, use the full path:
+
+```json
+{
+    "mcpServers": {
+        "focus": {
+            "command": "C:\\\\Windows\\\\System32\\\\cmd.exe",
+            "args": ["/d", "/c", "C:\\\\nvm4w\\\\nodejs\\\\focus.cmd", "start"],
+            "env": {
+                "PATH": "C:\\\\nvm4w\\\\nodejs;C:\\\\Users\\\\<user>\\\\AppData\\\\Roaming\\\\npm;C:\\\\Windows\\\\System32;C:\\\\Windows"
+            }
+        }
+    }
+}
+```
+
+### Codex on Windows
+
+Add this to `%USERPROFILE%\.codex\config.toml`:
+
+```toml
+[mcp_servers.focus]
+command = "C:\\\\Windows\\\\System32\\\\cmd.exe"
+args = ["/d", "/c", "C:\\\\nvm4w\\\\nodejs\\\\focus.cmd", "start"]
+startup_timeout_sec = 30
+tool_timeout_sec = 120
+
+[mcp_servers.focus.env]
+PATH = "C:\\\\nvm4w\\\\nodejs;C:\\\\Users\\\\<user>\\\\AppData\\\\Roaming\\\\npm;C:\\\\Windows\\\\System32;C:\\\\Windows"
+FOCUS_NO_UPDATE_NOTIFY = "1"
+```
+
+Replace `<user>` and the Node path if you do not use nvm4w.
+
+### Troubleshooting
+
+If brick installation fails with:
+
+```
+spawn npm ENOENT
+```
+
+update FocusMCP:
+
+```powershell
+npm install -g @focus-mcp/cli@latest
+```
+
+If brick loading fails with:
+
+```
+escapes bricksDir
+```
+
+make sure `focus --version` reports `2.3.1` or newer.
+
 ## Commands
 
 | Command | Description |
