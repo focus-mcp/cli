@@ -1,6 +1,6 @@
 {
     "name": "@focus-mcp/cli",
-    "version": "2.3.1",
+    "version": "2.4.0",
     "private": false,
     "description": "Focus your AI agents on what matters. 68+ bricks, 1 MCP server, modular context — from 200k to 2k tokens. Works with Claude Code, Cursor, Codex.",
     "license": "MIT",
@@ -71,7 +71,7 @@
         "prepare": "husky"
     },
     "dependencies": {
-        "@focus-mcp/core": "^1.5.0",
+        "@focus-mcp/core": "^1.6.0",
         "@modelcontextprotocol/sdk": "^1.0.0",
         "ink": "^5.0.0",
         "react": "^18.3.0"
