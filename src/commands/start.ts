@@ -32,6 +32,8 @@ import {
     configToolsShowCommand,
     configToolsUnpinCommand,
 } from './config.ts';
+import { focusHelp } from './help.ts';
+import { focusInit } from './init.ts';
 import { removeCommand } from './remove.ts';
 import { searchCommand } from './search.ts';
 import { upgradeCommand } from './upgrade.ts';
@@ -578,6 +580,45 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                       additionalProperties: false,
                   },
               },
+              // ---------- bootstrap namespace ----------
+              metaTool(
+                  'focus_init',
+                  'Detect the current project stack and recommend FocusMCP bricks to install. ' +
+                      'Returns a structured analysis (stack, files detected, recommended bricks, install commands). ' +
+                      'Call this once when arriving on a new project; the agent should then call focus_bricks_install for each recommended brick. ' +
+                      'The detection is read-only and does not install anything.',
+                  {
+                      type: 'object',
+                      properties: {
+                          project_path: {
+                              type: 'string',
+                              description:
+                                  'Optional project root path. Defaults to the CLI working directory.',
+                          },
+                      },
+                      additionalProperties: false,
+                  },
+                  true,
+              ),
+              metaTool(
+                  'focus_help',
+                  'Get FocusMCP concepts and pointers to documentation. ' +
+                      'Returns an index of concepts (brick, catalog, center, namespace, filtering, bootstrap, benchmarks) plus URLs to AGENT_GUIDE.md and the README. ' +
+                      'Pass a `topic` arg to get a specific concept description. ' +
+                      'Use this when you need to understand FocusMCP terminology or behavior.',
+                  {
+                      type: 'object',
+                      properties: {
+                          topic: {
+                              type: 'string',
+                              description:
+                                  'Optional concept key (e.g. "brick", "catalog"). Omit for the full index.',
+                          },
+                      },
+                      additionalProperties: false,
+                  },
+                  true,
+              ),
           ];
 
     server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -1079,6 +1120,66 @@ export async function startCommand(argv: string[] = []): Promise<void> {
                     };
                 }
             } // end focus_check_updates
+
+            if (name === 'focus_init') {
+                const rawArgs = args as Record<string, unknown> | undefined;
+                const rawProjectPath = rawArgs?.['project_path'];
+                const initInput: { project_path?: string } = {};
+                if (typeof rawProjectPath === 'string') {
+                    initInput.project_path = rawProjectPath;
+                }
+                try {
+                    const result = focusInit(initInput);
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: JSON.stringify(result, null, 2),
+                            },
+                        ],
+                    };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `focus_init failed: ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+            } // end focus_init
+
+            if (name === 'focus_help') {
+                const rawArgs = args as Record<string, unknown> | undefined;
+                const rawTopic = rawArgs?.['topic'];
+                const helpInput: { topic?: string } = {};
+                if (typeof rawTopic === 'string') {
+                    helpInput.topic = rawTopic;
+                }
+                try {
+                    const result = focusHelp(helpInput);
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: JSON.stringify(result, null, 2),
+                            },
+                        ],
+                    };
+                } catch (err) {
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: `focus_help failed: ${err instanceof Error ? err.message : String(err)}`,
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+            } // end focus_help
         } // end !isBenchMode
 
         // focus_tools_* are always handled regardless of bench mode and are immune to the hidden list
